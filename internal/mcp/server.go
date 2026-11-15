@@ -41,6 +41,9 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
+
+	"github.com/acamarata/cascade/pkg/cascade"
 )
 
 // MCPProtocolVersion is the revision this server speaks: the one the real
@@ -62,19 +65,24 @@ const (
 	MethodToolsCall  = "tools/call"
 )
 
+// methodPing is the liveness probe either side of a 2025-11-25 session may
+// send. The receiver MUST answer it, promptly, with an empty result.
+const methodPing = "ping"
+
 // Protocol-level error codes for this wire, in the same reserved band
 // convention internal/rpc/jsonrpc.go documents (jsonrpc.org's
 // -32768..-32600 range for framing-level rejections). MCP is its own
 // external protocol on its own wire (stdio, or bridged over the daemon
 // socket as one JSON-RPC method's params) so it keeps its own small table
 // rather than importing internal/rpc's — the two protocols share a
-// numbering convention, not a Go type.
+// numbering convention, not a Go type. There is no tool-failure code: a
+// tool that failed answers with a result (see toolCallResult), and an
+// unknown tool is invalid params, as the 2025-11-25 tools page specifies.
 const (
 	codeInvalidFrame   = -32700
 	codeInvalidRequest = -32600
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
-	codeToolNotFound   = -32001
 )
 
 // Frame is one decoded MCP request or notification.
@@ -179,14 +187,19 @@ type toolCallResult struct {
 }
 
 // Dispatch routes one validated Frame to its handler and always returns a
-// non-nil *Response — an MCP-level failure (unknown method, unknown tool,
-// bad params) is reported IN the response's Error field, never as a Go
-// error, matching how transport/socket.go bridges this into one
-// always-succeeding JSON-RPC method (see that file's doc comment).
+// non-nil *Response for a request — an MCP-level failure (unknown method,
+// unknown tool, bad params) is reported IN the response's Error field,
+// never as a Go error, matching how transport/socket.go bridges this into
+// one always-succeeding JSON-RPC method (see that file's doc comment). A
+// tool's own failure is not an MCP-level failure: it is a tools/call
+// result with isError set.
 func (s *Server) Dispatch(ctx context.Context, f *Frame) *Response {
 	// A notification is answered with silence, whatever it says. This runs
 	// BEFORE method routing so an unknown notification cannot produce a
-	// method-not-found response the client never asked for.
+	// method-not-found response the client never asked for. That includes
+	// notifications/cancelled: frames are dispatched one at a time, so a
+	// cancellation always names a request already answered, which the
+	// receiver may ignore.
 	if f.IsNotification() {
 		return nil
 	}
@@ -197,6 +210,8 @@ func (s *Server) Dispatch(ctx context.Context, f *Frame) *Response {
 		return &Response{JSONRPC: "2.0", ID: f.ID, Result: toolsListResult(s.Tools)}
 	case MethodToolsCall:
 		return s.dispatchToolsCall(ctx, f)
+	case methodPing:
+		return &Response{JSONRPC: "2.0", ID: f.ID, Result: struct{}{}}
 	default:
 		return errResponse(f.ID, codeMethodNotFound, "method not found: "+f.Method)
 	}
@@ -213,15 +228,33 @@ func (s *Server) dispatchToolsCall(ctx context.Context, f *Frame) *Response {
 		return errResponse(f.ID, codeInvalidParams, `tools/call requires "name"`)
 	}
 	if err := s.checkTool(ctx, p.Name); err != nil {
-		return &Response{JSONRPC: "2.0", ID: f.ID, Result: toolCallResult{
-			Content: []contentBlock{{Type: "text", Text: err.Error()}}, IsError: true,
-		}}
+		return toolErrorResult(f.ID, err)
 	}
 	out, err := s.Tools.Call(ctx, p.Name, p.Arguments)
+	if isToolUnknown(err) {
+		return errResponse(f.ID, codeInvalidParams, "Unknown tool: "+p.Name)
+	}
 	if err != nil {
-		return errResponse(f.ID, codeToolNotFound, err.Error())
+		return toolErrorResult(f.ID, err)
 	}
 	return &Response{JSONRPC: "2.0", ID: f.ID, Result: toolCallResult{
 		Content: []contentBlock{{Type: "text", Text: string(out)}},
 	}}
+}
+
+// toolErrorResult answers a tool's failure (a business error, or its
+// arguments failing the handler's own validation) as a tool result the
+// model can read: the typed error message as text, isError true.
+func toolErrorResult(id json.RawMessage, err error) *Response {
+	return &Response{JSONRPC: "2.0", ID: id, Result: toolCallResult{
+		Content: []contentBlock{{Type: "text", Text: err.Error()}}, IsError: true,
+	}}
+}
+
+// isToolUnknown reports whether err is the ErrToolUnknown sentinel itself.
+// errors.Is would not do: cascade errors match by Kind alone, so a
+// handler's own not-found failure would be mistaken for an unknown tool.
+func isToolUnknown(err error) bool {
+	var ce *cascade.Error
+	return errors.As(err, &ce) && ce == ErrToolUnknown
 }

@@ -117,23 +117,41 @@ func TestDelegateToolRegistration(t *testing.T) {
 	}
 }
 
-// assertDelegateToolError accepts exactly one shape: a JSON-RPC error whose
-// message decodes as {"kind", "message"} with kind == wantKind.
-func assertDelegateToolError(t *testing.T, frame *mcp.Response, wantKind string) {
+// assertDelegateToolError accepts exactly one shape: a tools/call result
+// with isError true and one text block that decodes as {"kind", "message"}
+// with kind == wantKind, never a JSON-RPC error. It returns that text.
+func assertDelegateToolError(t *testing.T, frame *mcp.Response, wantKind string) string {
 	t.Helper()
-	if frame.Error == nil {
-		t.Fatalf("want a typed error, got result %v", frame.Result)
+	if frame.Error != nil {
+		t.Fatalf("want an isError tool result, got JSON-RPC error %v", frame.Error)
+	}
+	raw, err := json.Marshal(frame.Result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+		IsError bool `json:"isError"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil || !result.IsError ||
+		len(result.Content) != 1 || result.Content[0].Type != "text" {
+		t.Fatalf("want one text block with isError true, got %s (%v)", raw, err)
 	}
 	var typed struct {
 		Kind    string `json:"kind"`
 		Message string `json:"message"`
 	}
-	if err := json.Unmarshal([]byte(frame.Error.Message), &typed); err != nil {
-		t.Fatalf("error message is not a typed object: %q (%v)", frame.Error.Message, err)
+	text := result.Content[0].Text
+	if err := json.Unmarshal([]byte(text), &typed); err != nil {
+		t.Fatalf("tool error text is not a typed object: %q (%v)", text, err)
 	}
 	if typed.Kind != wantKind || typed.Message == "" {
 		t.Fatalf("typed error = %+v, want kind %q and a message", typed, wantKind)
 	}
+	return text
 }
 
 func callDelegateTool(t *testing.T, fn rpc.HandlerFunc, tool string) *mcp.Response {
@@ -147,7 +165,8 @@ func callDelegateTool(t *testing.T, fn rpc.HandlerFunc, tool string) *mcp.Respon
 	})
 }
 
-// TestDelegateToolResponseShape: {job_id, status: dispatched} or a typed error.
+// TestDelegateToolResponseShape: {job_id, status: dispatched} or a typed
+// error carried as an isError tool result.
 func TestDelegateToolResponseShape(t *testing.T) {
 	success := func(context.Context, json.RawMessage) (any, error) {
 		return map[string]string{"job_id": "j1", "status": "dispatched"}, nil
@@ -168,10 +187,9 @@ func TestDelegateToolResponseShape(t *testing.T) {
 			t.Errorf("%s: result lacks job_id/status: %s", tool, raw)
 		}
 		assertDelegateToolError(t, callDelegateTool(t, typed, tool), "unavailable")
-		frame = callDelegateTool(t, plain, tool)
-		assertDelegateToolError(t, frame, "internal")
-		if strings.Contains(frame.Error.Message, "secret") {
-			t.Errorf("%s: raw Go error text leaked: %s", tool, frame.Error.Message)
+		text := assertDelegateToolError(t, callDelegateTool(t, plain, tool), "internal")
+		if strings.Contains(text, "secret") {
+			t.Errorf("%s: raw Go error text leaked: %s", tool, text)
 		}
 	}
 }

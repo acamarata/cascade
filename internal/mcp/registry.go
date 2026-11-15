@@ -24,9 +24,9 @@ package mcp
 
 import (
 	"context"
-	"fmt"
 	"sort"
 
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -188,15 +188,24 @@ func (r *ToolRegistry) List() []Tool {
 	return out
 }
 
+// ErrToolUnknown is what Call returns, as this exact value, for a name
+// outside the filtered set. Dispatch answers it with the JSON-RPC error the
+// 2025-11-25 tools page specifies (-32602 "Unknown tool: <name>"); every
+// other Call error is the tool's own failure and travels as a tool result.
+// Callers match it by identity, not errors.Is: cascade errors compare by
+// Kind, and a handler's own not-found error shares this one's Kind.
+var ErrToolUnknown = cascade.New(cascade.KindNotFound, "mcp: unknown tool")
+
 // Call dispatches name with input to its plugin handler. name not being in
 // the filtered set is indistinguishable, from the caller's side, between
 // "does not exist" and "exists but was filtered out" — deliberately: an
 // MCP client must never learn that a tool exists but was denied, which
 // would leak the existence of privileged capability to an untrusted model.
+// Both answer ErrToolUnknown, byte for byte.
 func (r *ToolRegistry) Call(ctx context.Context, name string, input []byte) ([]byte, error) {
 	rt, ok := r.tools[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown tool: %s", name)
+		return nil, ErrToolUnknown
 	}
 	return rt.handler(ctx, input)
 }

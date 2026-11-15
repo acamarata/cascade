@@ -189,7 +189,7 @@ func TestMCPServeProfileFlagServesNarrowerTools(t *testing.T) {
 	if !strings.Contains(got, "cascade_context_search") || strings.Contains(got, "cascade_other_full_only") {
 		t.Fatalf("tools/list = %s, want compact members only", got)
 	}
-	if !strings.Contains(got, "unknown tool: cascade_memory_remember") {
+	if !strings.Contains(got, "Unknown tool: cascade_memory_remember") {
 		t.Fatalf("write tool call not refused as unknown: %s", got)
 	}
 	if want := "cascade: --profile full exceeds the admitted [mcp].profile compact; serving compact"; !strings.Contains(errOut.String(), want) {

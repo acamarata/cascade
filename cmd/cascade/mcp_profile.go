@@ -239,7 +239,7 @@ func (d profileDispatcher) Dispatch(ctx context.Context, f *mcp.Frame) *mcp.Resp
 			}
 			if !profileToolVisible(d.profile, name) {
 				return &mcp.Response{JSONRPC: "2.0", ID: f.ID,
-					Error: &mcp.ErrorObject{Code: -32001, Message: "unknown tool: " + name}}
+					Error: &mcp.ErrorObject{Code: -32602, Message: "Unknown tool: " + name}}
 			}
 		}
 	}

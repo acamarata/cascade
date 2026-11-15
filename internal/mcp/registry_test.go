@@ -2,8 +2,11 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"testing"
 
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/plugin"
 )
 
@@ -96,5 +99,88 @@ func TestToolRegistry_List_Deterministic(t *testing.T) {
 	list := r.List()
 	if len(list) != 2 || list[0].Name != "aaa-tool" || list[1].Name != "zzz-tool" {
 		t.Fatalf("List() = %+v, want sorted [aaa-tool, zzz-tool]", list)
+	}
+}
+
+// toolsCall builds a tools/call request for name with empty arguments.
+func toolsCall(name string) *Frame {
+	return &Frame{JSONRPC: "2.0", Method: MethodToolsCall, ID: json.RawMessage("1"),
+		Params: json.RawMessage(`{"name":"` + name + `","arguments":{}}`)}
+}
+
+// TestMCPRegistryUnknownTool: an unregistered name is ErrToolUnknown
+// itself, asserted by identity and message (errors.Is compares Kind only),
+// and Dispatch answers it -32602 "Unknown tool: <name>".
+func TestMCPRegistryUnknownTool(t *testing.T) {
+	r := NewToolRegistry(func() []plugin.BuiltinRegistration { return nil }, AllowAllFilter{})
+	_, err := r.Call(context.Background(), "no_such_tool", nil)
+	var ce *cascade.Error
+	if !errors.As(err, &ce) || ce != ErrToolUnknown || err.Error() != "not-found: mcp: unknown tool" {
+		t.Fatalf("Call(unknown) = %v, want ErrToolUnknown itself", err)
+	}
+	resp := NewServer(r).Dispatch(context.Background(), toolsCall("no_such_tool"))
+	if resp == nil || resp.Result != nil || resp.Error == nil || resp.Error.Code != -32602 ||
+		resp.Error.Message != "Unknown tool: no_such_tool" {
+		t.Fatalf("Dispatch(unknown) = %+v, want -32602 \"Unknown tool: no_such_tool\"", resp)
+	}
+}
+
+// TestMCPUnknownToolInvalidParams: a withheld tool gets the same -32602
+// answer as an absent one, while a handler's own not-found error (same
+// Kind as ErrToolUnknown) stays a tool result.
+func TestMCPUnknownToolInvalidParams(t *testing.T) {
+	missing := cascade.New(cascade.KindNotFound, "widget w1 not found")
+	lookup := CoreRegistration{Tool: Tool{Name: "widget_get"}, Grants: []string{"read"},
+		Handler: func(context.Context, []byte) ([]byte, error) { return nil, missing }}
+	source := func() []plugin.BuiltinRegistration {
+		return []plugin.BuiltinRegistration{reg("p1", []string{"admin"}, "secret-tool")}
+	}
+	s := NewServer(NewToolRegistry(source, AllowAllFilter{}, lookup))
+	resp := s.Dispatch(context.Background(), toolsCall("secret-tool"))
+	if resp == nil || resp.Error == nil || resp.Error.Code != -32602 || resp.Error.Message != "Unknown tool: secret-tool" {
+		t.Fatalf("withheld tool = %+v, want -32602 \"Unknown tool: secret-tool\"", resp)
+	}
+	resp = s.Dispatch(context.Background(), toolsCall("widget_get"))
+	result, ok := resp.Result.(toolCallResult)
+	if resp.Error != nil || !ok || !result.IsError || len(result.Content) != 1 || result.Content[0].Text != missing.Error() {
+		t.Fatalf("handler not-found = %+v, want an isError result carrying %q", resp, missing.Error())
+	}
+}
+
+// TestMCPPingAnswered: the receiver MUST answer ping, with an empty result.
+func TestMCPPingAnswered(t *testing.T) {
+	s := NewServer(NewToolRegistry(func() []plugin.BuiltinRegistration { return nil }, AllowAllFilter{}))
+	raw, err := json.Marshal(s.Dispatch(context.Background(), &Frame{JSONRPC: "2.0", Method: "ping", ID: json.RawMessage("9")}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != `{"jsonrpc":"2.0","id":9,"result":{}}` {
+		t.Fatalf("ping = %s, want an empty result", raw)
+	}
+}
+
+// TestMCPCancelledNotificationIsSilent: notifications/cancelled for an
+// answered id yields no frame and changes no later answer.
+func TestMCPCancelledNotificationIsSilent(t *testing.T) {
+	source := func() []plugin.BuiltinRegistration {
+		return []plugin.BuiltinRegistration{reg("p-a", []string{"read"}, "aaa-tool")}
+	}
+	s := NewServer(NewToolRegistry(source, AllowAllFilter{}))
+	list := &Frame{JSONRPC: "2.0", Method: MethodToolsList, ID: json.RawMessage("1")}
+	before, err := json.Marshal(s.Dispatch(context.Background(), list))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cancel := &Frame{JSONRPC: "2.0", Method: "notifications/cancelled",
+		Params: json.RawMessage(`{"requestId":1,"reason":"user"}`)}
+	if resp := s.Dispatch(context.Background(), cancel); resp != nil {
+		t.Fatalf("notifications/cancelled answered %+v, want silence", resp)
+	}
+	after, err := json.Marshal(s.Dispatch(context.Background(), list))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(before) != string(after) || len(before) == 0 {
+		t.Fatalf("answer changed after a cancellation:\n %s\n %s", before, after)
 	}
 }

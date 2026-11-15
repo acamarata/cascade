@@ -228,8 +228,10 @@ func TestMCPCIToolsOverTheStdioWire(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fx.repo, "marker.txt")); err != nil {
 		t.Errorf("the step did not run in the server's working directory: %v", err)
 	}
-	// The refused call (id 5) is a JSON-RPC error, not a result.
-	if !strings.Contains(out, `"id":5,"error"`) {
+	// The refused call (id 5) is the tool's own failure: a result with
+	// isError true, not a JSON-RPC error.
+	if !strings.Contains(out, `"id":5,"result":{"content":[{"type":"text","text":"invalid-input: `) ||
+		!strings.Contains(out, `unknown field \"repo\""}],"isError":true}`) {
 		t.Errorf("the repo argument was not refused: %s", out)
 	}
 }
