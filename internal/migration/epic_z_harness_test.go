@@ -112,6 +112,13 @@ func epicDoctorReport(data []byte, rc int) error {
 			switch entry.Name {
 			case "completion-gate-hooks", "hook-events", "notify-drops", "provider_health", "subsystem_census":
 				warnings++
+			case "controller_role":
+				// A migrated home has never run init or the daemon, so the role
+				// check reports it undesignated; any other role result is a bug.
+				if !strings.Contains(entry.Result.Message, "not designated yet") {
+					return fmt.Errorf("unexpected controller_role warning: %s", entry.Result.Message)
+				}
+				warnings++
 			case "elevation_custody":
 				// P1-SEC-12 contract: an unenrolled host warns and says elevated
 				// verbs refuse. This sealed machine never enrols, so only that
