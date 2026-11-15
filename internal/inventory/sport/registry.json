@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-14T20:27:10Z",
+  "generated_at": "2026-11-15T00:13:34Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -992,6 +992,20 @@
       ],
       "statuses": [
         "ADD"
+      ]
+    },
+    {
+      "name": "HarnessCredentials",
+      "sites": [
+        {
+          "file": "internal/secrets/harness_credentials_copystore.go",
+          "line": 5,
+          "status": "CHANGE",
+          "raw": "HarnessCredentials/CHANGED."
+        }
+      ],
+      "statuses": [
+        "CHANGE"
       ]
     },
     {
@@ -2381,6 +2395,20 @@
       ]
     },
     {
+      "name": "cli.doctor.controller_role",
+      "sites": [
+        {
+          "file": "cmd/cascade/doctor_mounts_node_role.go",
+          "line": 15,
+          "status": "ADD",
+          "raw": "cli.doctor.controller_role/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cli.doctor.gateway",
       "sites": [
         {
@@ -2731,6 +2759,20 @@
       ]
     },
     {
+      "name": "cli/context-generate",
+      "sites": [
+        {
+          "file": "cmd/cascade/context_generate.go",
+          "line": 11,
+          "status": "ADD",
+          "raw": "cli/context-generate/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "cli/context-scope-show",
       "sites": [
         {
@@ -2812,6 +2854,26 @@
           "status": "ADD",
           "ticket": "P1-E26-W10-S53-T3",
           "raw": "cli/context-sync-projects/ADD (P1-E26-W10-S53-T3 sport_updates)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cli/inbox",
+      "sites": [
+        {
+          "file": "cmd/cascade/inbox.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "cli/inbox/ADD (P1-HRN-06c)."
+        },
+        {
+          "file": "cmd/cascade/inbox_test.go",
+          "line": 10,
+          "status": "ADD",
+          "raw": "cli/inbox/ADD (P1-HRN-06c)."
         }
       ],
       "statuses": [
@@ -4564,6 +4626,20 @@
       ]
     },
     {
+      "name": "cmd/cascade claude kernel flags",
+      "sites": [
+        {
+          "file": "cmd/cascade/claude_kernel_flags_integration_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade claude kernel flags (TEST)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade clipboard audit sink",
       "sites": [
         {
@@ -5047,6 +5123,12 @@
           "line": 27,
           "status": "",
           "raw": "cmd/cascade daemon registrations (P1-HRN-02)."
+        },
+        {
+          "file": "cmd/cascade/wire_learn_status.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade daemon registrations (learn read and reset verbs)."
         },
         {
           "file": "cmd/cascade/wire_mcp.go",
@@ -5543,6 +5625,20 @@
       ]
     },
     {
+      "name": "cmd/cascade guarded harness binary",
+      "sites": [
+        {
+          "file": "cmd/cascade/guarded_harness_binary.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade guarded harness binary."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade guarded hooks family",
       "sites": [
         {
@@ -5626,6 +5722,20 @@
           "line": 10,
           "status": "",
           "raw": "cmd/cascade hooks RPCs (P1-SUP-02b)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade hooks composed-daemon scenarios",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_effect_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade hooks composed-daemon scenarios (TEST)."
         }
       ],
       "statuses": [
@@ -6303,6 +6413,12 @@
           "line": 30,
           "status": "",
           "raw": "cmd/cascade root mounts (P1-AGT-14, contract:agent-hook-relay)."
+        },
+        {
+          "file": "cmd/cascade/mount_inbox.go",
+          "line": 2,
+          "status": "",
+          "raw": "cmd/cascade root mounts (P1-CORE-01)."
         },
         {
           "file": "cmd/cascade/mount_init.go",
@@ -8040,7 +8156,7 @@
         },
         {
           "file": "cmd/cascade/fleet_learn_reset.go",
-          "line": 17,
+          "line": 18,
           "status": "ADD",
           "raw": "cmd/cascade/fleet-learn-cli (ADD, P1-LRN-04)."
         },
@@ -8138,6 +8254,27 @@
           "line": 12,
           "status": "",
           "raw": "cmd/cascade/fleet-sessions-hook (coverage for P1-CORE-14)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/fleet-tool-gate",
+      "sites": [
+        {
+          "file": "cmd/cascade/fleet_tool_gate.go",
+          "line": 25,
+          "status": "ADD",
+          "raw": "cmd/cascade/fleet-tool-gate (ADD)."
+        },
+        {
+          "file": "cmd/cascade/fleet_tool_gate_test.go",
+          "line": 11,
+          "status": "",
+          "raw": "cmd/cascade/fleet-tool-gate (coverage)."
         }
       ],
       "statuses": [
@@ -9445,7 +9582,7 @@
       "sites": [
         {
           "file": "internal/conductor/fanout.go",
-          "line": 23,
+          "line": 25,
           "status": "CHANGE",
           "ticket": "P1-E11-W3-S23-T2",
           "raw": "conductor.fanout/CHANGE (P1-E11-W3-S23-T2; P1-CORE-18)."
@@ -11761,6 +11898,12 @@
         {
           "file": "internal/fleet/capacity/fleet_test.go",
           "line": 6,
+          "status": "",
+          "raw": "fleet.capacity.lease."
+        },
+        {
+          "file": "internal/fleet/capacity/floor_ceiling.go",
+          "line": 10,
           "status": "",
           "raw": "fleet.capacity.lease."
         },
@@ -20798,6 +20941,12 @@
           "raw": "internal.providers.agents/ADD (P1-GWY-05, contract:gateway-agent-credential)."
         },
         {
+          "file": "internal/providers/agents/harness_antigravity.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.providers.agents/ADD (P1-AGT-07g)."
+        },
+        {
           "file": "internal/providers/agents/harness_claude.go",
           "line": 8,
           "status": "ADD",
@@ -24534,6 +24683,18 @@
           "line": 8,
           "status": "ADD",
           "raw": "internal/daemon (ADD, P1-TOP-06e)."
+        },
+        {
+          "file": "internal/daemon/topology_sensitivity.go",
+          "line": 12,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-TOP-02dw)."
+        },
+        {
+          "file": "internal/daemon/topology_sensitivity_test.go",
+          "line": 6,
+          "status": "ADD",
+          "raw": "internal/daemon (ADD, P1-TOP-02dw)."
         },
         {
           "file": "internal/daemon/upgrade.go",
@@ -34227,7 +34388,7 @@
       "sites": [
         {
           "file": "internal/jobs/delegation.go",
-          "line": 23,
+          "line": 21,
           "status": "ADD",
           "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
         },
@@ -34245,7 +34406,7 @@
         },
         {
           "file": "internal/jobs/delegation_schema.go",
-          "line": 25,
+          "line": 28,
           "status": "ADD",
           "raw": "jobs/delegation-record/ADD (P1-AGT-11)."
         },
@@ -44840,7 +45001,7 @@
       ]
     }
   ],
-  "total_sites": 4318,
-  "unspecified_count": 420,
-  "multi_status_count": 132
+  "total_sites": 4334,
+  "unspecified_count": 423,
+  "multi_status_count": 133
 }
