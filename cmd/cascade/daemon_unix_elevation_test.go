@@ -96,10 +96,11 @@ func TestNoUnelevatedRegistryServesElevatedVerb(t *testing.T) {
 		reg           *rpc.Registry
 		wantChallenge bool
 	}{
-		"daemon":     {daemonReg, true},
-		"mcp tools":  {wiring.Methods, false},
-		"mcp socket": {socketReg, false},
-		"node serve": {nodes.BuildServeRegistry(nodes.ServeDeps{Clock: clock}), false},
+		"daemon":      {daemonReg, true},
+		"mcp tools":   {wiring.Methods, false},
+		"mcp socket":  {socketReg, false},
+		"node serve":  {nodes.BuildServeRegistry(nodes.ServeDeps{Clock: clock}), false},
+		"node facing": {nodes.NewNodeFacing(nodes.NodeFacingDeps{Clock: clock}).Registry(), false},
 	} {
 		t.Run(name, func(t *testing.T) {
 			problems, canary := unelevatedProblems(tc.reg, tc.wantChallenge)
@@ -125,7 +126,7 @@ func TestUnelevatedSweepCatchesARegistryWithoutTheMiddleware(t *testing.T) {
 
 // Every non-test rpc.NewRegistry() call site is one the sweep above builds.
 func TestEveryProductionRegistrySiteIsSwept(t *testing.T) {
-	want := []string{"../../cmd/cascade/daemon_unix_run.go", "../../cmd/cascade/mcp.go", "../../cmd/cascade/mcp_tools.go", "../../internal/nodes/serve_registry.go"}
+	want := []string{"../../cmd/cascade/daemon_unix_run.go", "../../cmd/cascade/mcp.go", "../../cmd/cascade/mcp_tools.go", "../../internal/nodes/nodefacing.go", "../../internal/nodes/serve_registry.go"}
 	var got []string
 	for _, root := range []string{"../../cmd", "../../internal", "../../pkg", "../../plugins", "../../providers"} {
 		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
