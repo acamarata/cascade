@@ -1,9 +1,6 @@
 package log
 
-import (
-	"os"
-	"path/filepath"
-)
+import "os"
 
 // RunWithScratch creates a temporary scratch directory under base, runs fn with
 // the path to that directory, then removes the directory regardless of whether
@@ -26,20 +23,4 @@ func RunWithScratch(base string, fn func(string) error) (err error) {
 	}()
 
 	return fn(dir)
-}
-
-// ScratchDir creates a new scratch directory under base and returns its path.
-// The caller is responsible for removing it.
-func ScratchDir(base string) (string, error) {
-	return os.MkdirTemp(base, "scratch-")
-}
-
-// EnsureDir creates dir if it does not already exist.
-func EnsureDir(dir string) error {
-	return os.MkdirAll(dir, 0o755)
-}
-
-// JoinPaths joins elem... to base using filepath.Join.
-func JoinPaths(base string, elem ...string) string {
-	return filepath.Join(append([]string{base}, elem...)...)
 }

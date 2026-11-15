@@ -16,10 +16,8 @@ const (
 type ChatState int
 
 const (
-	// OpenState represents an open chat.
-	OpenState ChatState = iota
-	// WaitingState represents a waiting chat.
-	WaitingState
+	// WaitingState represents a waiting chat. It is the zero value: every chat the plan opens starts in Waiting.
+	WaitingState ChatState = iota
 	// ArchivedState represents an archived chat.
 	ArchivedState
 )

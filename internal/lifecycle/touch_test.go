@@ -15,11 +15,10 @@ func TestTouchpointTypesExist(t *testing.T) {
 
 	// Verify ChatState values exist
 	_ = ChatState(0)
-	openState := OpenState
 	waitingState := WaitingState
 	archivedState := ArchivedState
-	if openState == waitingState || openState == archivedState || waitingState == archivedState {
-		t.Error("Open, Waiting, and Archived states should be distinct")
+	if waitingState == archivedState {
+		t.Error("Waiting and Archived states should be distinct")
 	}
 
 	// Verify chat name constants exist
@@ -34,7 +33,7 @@ func TestTouchpointTypesExist(t *testing.T) {
 	chat := TouchpointChat{
 		Name:         "Test Chat",
 		Kind:         PlanningKind,
-		State:        OpenState,
+		State:        WaitingState,
 		TemplateText: "Template",
 		ProjectID:    "proj-123",
 	}
@@ -45,7 +44,7 @@ func TestTouchpointTypesExist(t *testing.T) {
 	if chat.Kind != PlanningKind {
 		t.Error("TouchpointChat Kind field not working")
 	}
-	if chat.State != OpenState {
+	if chat.State != WaitingState {
 		t.Error("TouchpointChat State field not working")
 	}
 	if chat.TemplateText != "Template" {
