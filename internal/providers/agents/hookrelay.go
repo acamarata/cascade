@@ -219,7 +219,7 @@ func openCounter(path string, uid int) (*os.File, error) {
 	case errors.Is(err, errDirUntrusted):
 		return nil, deniedf("the callback socket's directory is not a private directory owned by the caller")
 	case err != nil:
-		return nil, deniedf("the sequence file cannot be opened")
+		return nil, deniedf("the sequence file cannot be opened (%v)", err)
 	}
 	if fi, err := f.Stat(); err != nil || !counterTrusted(fi, uid) {
 		_ = f.Close()

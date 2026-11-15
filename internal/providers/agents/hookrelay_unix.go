@@ -27,6 +27,7 @@ package agents
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -91,7 +92,9 @@ func socketTrusted(fi os.FileInfo, uid int) bool {
 // symlink) owned by uid and, when private, with no group or other bits;
 // otherwise errDirUntrusted. A failed open of name is errFileUnopenable.
 func openUnderDir(dir, name string, flag int, perm os.FileMode, uid int, private bool) (*os.File, error) {
-	dfd, err := unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	dfd, err := retryEINTR(func() (int, error) {
+		return unix.Open(dir, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	})
 	if err != nil {
 		return nil, errDirUntrusted
 	}
@@ -101,13 +104,27 @@ func openUnderDir(dir, name string, flag int, perm os.FileMode, uid int, private
 	if err != nil || !fi.IsDir() || !ownedBy(fi, uid) || (private && fi.Mode().Perm()&0o077 != 0) {
 		return nil, errDirUntrusted
 	}
-	fd, err := unix.Openat(int(d.Fd()), name, flag|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, uint32(perm.Perm()))
+	fd, err := retryEINTR(func() (int, error) {
+		return unix.Openat(int(d.Fd()), name, flag|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, uint32(perm.Perm()))
+	})
 	if err != nil {
-		return nil, errFileUnopenable
+		return nil, fmt.Errorf("%w: %v", errFileUnopenable, err)
 	}
 	if err := unix.SetNonblock(fd, false); err != nil {
 		_ = unix.Close(fd)
-		return nil, errFileUnopenable
+		return nil, fmt.Errorf("%w: %v", errFileUnopenable, err)
 	}
 	return os.NewFile(uintptr(fd), filepath.Join(dir, name)), nil
+}
+
+// retryEINTR repeats an open the kernel interrupted. Under load a signal (the
+// Go runtime's preemption signal among them) can interrupt open(2) with EINTR,
+// which x/sys/unix does not retry; that is not a refusal, so it is retried.
+func retryEINTR(open func() (int, error)) (int, error) {
+	for {
+		fd, err := open()
+		if !errors.Is(err, unix.EINTR) {
+			return fd, err
+		}
+	}
 }
