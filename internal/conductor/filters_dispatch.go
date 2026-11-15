@@ -50,25 +50,17 @@ func filterHealth(cands []laneCandidate, flags []string) ([]laneCandidate, []str
 }
 
 // filterQuota is FILTER 4 (R-40.X11): calls QuotaSpiller.NextLane over
-// the candidate set FILTERS 1-3 already produced. excluded is built as
+// the candidate set FILTERS 1-3 already produced, which filterRank hands
+// over in Rank order. With no spill order configured the whole ranked
+// list is one partition and the pick is its first lane AdmitLane admits;
+// a configured spill order makes each listed lane its own partition, so
+// NextLane's first listed eligible lane goes first. excluded is built as
 // Select's own exclude argument UNION every lane in the full snapshot
 // that FILTERS 1-3 already removed, so NextLane's own spill_order can
 // only ever resolve to a lane still in cands - spill never reintroduces a
 // filtered-out lane.
 func filterQuota(ctx context.Context, quota QuotaSpiller, allLanes, cands []laneCandidate, exclude []string, flags []string) (laneCandidate, []string, error) {
-	survivors := make(map[string]bool, len(cands))
-	for _, c := range cands {
-		survivors[c.lane.LaneName] = true
-	}
-	excluded := make([]LaneID, 0, len(allLanes)+len(exclude))
-	for _, x := range exclude {
-		excluded = append(excluded, LaneID(x))
-	}
-	for _, c := range allLanes {
-		if !survivors[c.lane.LaneName] {
-			excluded = append(excluded, LaneID(c.lane.LaneName))
-		}
-	}
+	excluded := quotaExcluded(quota, allLanes, cands, exclude)
 	// An UNCONFIGURED spill order expresses no preference, and must not
 	// veto. defaultQuotaConfig() has an empty SpillOrder and the daemon
 	// parses no [conductor.quota] section, so NextLane returned
@@ -102,6 +94,36 @@ func filterQuota(ctx context.Context, quota QuotaSpiller, allLanes, cands []lane
 	// already produced - an invariant violation in the excluded-set
 	// construction above, never a lane to dispatch to.
 	return laneCandidate{}, flags, ErrAllProvidersEvicted
+}
+
+// quotaExcluded builds NextLane's excluded set: Select's exclude argument,
+// every snapshot lane not in cands, and every configured spill-order lane
+// not in cands (a listed lane the registry does not hold, or one the
+// filters or the ranking dropped). NextLane can then only return a lane
+// still in cands, so the first listed eligible lane's partition goes
+// first.
+func quotaExcluded(quota QuotaSpiller, allLanes, cands []laneCandidate, exclude []string) []LaneID {
+	survivors := make(map[string]bool, len(cands))
+	for _, c := range cands {
+		survivors[c.lane.LaneName] = true
+	}
+	excluded := make([]LaneID, 0, len(allLanes)+len(exclude))
+	for _, x := range exclude {
+		excluded = append(excluded, LaneID(x))
+	}
+	for _, c := range allLanes {
+		if !survivors[c.lane.LaneName] {
+			excluded = append(excluded, LaneID(c.lane.LaneName))
+		}
+	}
+	if sl, ok := quota.(spillOrderLister); ok {
+		for _, id := range sl.listSpillOrder() {
+			if !survivors[string(id)] {
+				excluded = append(excluded, id)
+			}
+		}
+	}
+	return excluded
 }
 
 // filterQuotaUnconfigured selects the first candidate whose AdmitLane succeeds

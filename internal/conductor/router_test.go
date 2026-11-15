@@ -264,7 +264,7 @@ func TestRouter_SnapshotImmutable(t *testing.T) {
 // event and still returns a usable *DefaultRouter.
 func TestNewDaemonRouter_WiresQuotaAndPublishesDivergence(t *testing.T) {
 	bus := &fakeEventPublisher{}
-	r, err := NewDaemonRouter(nil, nil, bus, nil, nil, WithLaneTierCap(conductorTestCap))
+	r, err := NewDaemonRouter(nil, nil, bus, nil, nil, WithLaneTierCap(conductorTestCap), WithRanker(laneNameRank))
 	if err != nil {
 		t.Fatalf("NewDaemonRouter: %v", err)
 	}
