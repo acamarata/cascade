@@ -2,13 +2,11 @@ package mcp_test
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/acamarata/cascade/internal/buildinfo"
 	"github.com/acamarata/cascade/internal/mcp"
 	"github.com/acamarata/cascade/pkg/plugin"
 
@@ -53,89 +51,28 @@ func readFrames(t *testing.T, name string) [][]byte {
 }
 
 // TestTheRealClientsSessionReplays drives every captured request through
-// the server and compares against the captured responses, in order.
+// the server and compares against the captured responses, in order, with
+// the replay harness every capture shares (replay_harness_test.go).
 //
 // serverInfo.version is the one field NOT compared literally: it is the
 // build stamp, so a golden that froze it would fail on every release
-// build. It is asserted to equal buildinfo.Version instead, which is
-// stricter than skipping it — a wrong value still fails.
+// build. CompareFrames asserts it equals buildinfo.Version instead, which
+// is stricter than skipping it: a wrong value still fails.
 func TestTheRealClientsSessionReplays(t *testing.T) {
-	requests := readFrames(t, "in.jsonl")
-	responses := readFrames(t, "out.jsonl")
-	if len(requests) == 0 || len(responses) == 0 {
-		t.Fatal("the capture is empty; the goldens were never recorded")
-	}
-
-	server := mcp.NewServer(capturedRegistry())
-	next := 0
-	for _, line := range requests {
-		frame, perr := mcp.ParseFrame(line)
-		if perr != nil {
-			t.Fatalf("a captured client frame no longer parses: %v\n %s", perr, line)
-		}
-		got := server.Dispatch(context.Background(), frame)
-		if got == nil {
-			// A notification. The capture must contain no response for it,
-			// which is exactly what "in order" checks: the next recorded
-			// response belongs to the next request that had an id.
-			continue
-		}
-		if next >= len(responses) {
-			t.Fatalf("the server answered %q but the capture has no response left for it", frame.Method)
-		}
-		assertSameFrame(t, frame.Method, responses[next], got)
-		next++
-	}
-	if next != len(responses) {
-		t.Errorf("replayed %d responses, the capture holds %d", next, len(responses))
-	}
-}
-
-// assertSameFrame compares one response against its captured counterpart.
-func assertSameFrame(t *testing.T, method string, want []byte, got *mcp.Response) {
-	t.Helper()
-	gotBytes, err := json.Marshal(got)
+	in, out, _, err := mcp.ReadCapture(goldenDir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantAny, gotAny := decodeAny(t, want), decodeAny(t, gotBytes)
-	normalizeServerVersion(t, wantAny)
-	normalizeServerVersion(t, gotAny)
-
-	wantJSON, _ := json.Marshal(wantAny)
-	gotJSON, _ := json.Marshal(gotAny)
-	if string(wantJSON) != string(gotJSON) {
-		t.Errorf("%s: the answer changed since the real client accepted it\n captured: %s\n now:      %s",
-			method, wantJSON, gotJSON)
+	if len(in) == 0 || len(out) == 0 {
+		t.Fatal("the capture is empty; the goldens were never recorded")
 	}
-}
-
-// decodeAny parses a frame into a generic value for comparison.
-func decodeAny(t *testing.T, raw []byte) map[string]any {
-	t.Helper()
-	var out map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
-		t.Fatalf("frame is not JSON: %v\n %s", err, raw)
+	got, err := mcp.Replay(context.Background(), mcp.NewServer(capturedRegistry()), in)
+	if err != nil {
+		t.Fatal(err)
 	}
-	return out
-}
-
-// normalizeServerVersion replaces serverInfo.version with a marker, after
-// asserting it is the build version. Nothing else is normalized.
-func normalizeServerVersion(t *testing.T, frame map[string]any) {
-	t.Helper()
-	result, _ := frame["result"].(map[string]any)
-	if result == nil {
-		return
+	if err := mcp.CompareFrames(out, got); err != nil {
+		t.Errorf("the answer changed since the real client accepted it: %v", err)
 	}
-	info, _ := result["serverInfo"].(map[string]any)
-	if info == nil {
-		return
-	}
-	if v, ok := info["version"].(string); ok && v != buildinfo.Version {
-		t.Errorf("serverInfo.version = %q, want the build version %q", v, buildinfo.Version)
-	}
-	info["version"] = "<build>"
 }
 
 // capturedRegistry rebuilds the exact tool set the capture session had:

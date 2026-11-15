@@ -1,0 +1,7 @@
+{
+  "client": "claude-code",
+  "client_version": "2.1.273",
+  "protocol_version": "2025-11-25",
+  "captured_at": "2026-09-16",
+  "command": "cascade mcp serve --stdio --capture <dir> (throwaway .mcp.json); claude -p --mcp-config <file> \"list the cascade tools\""
+}

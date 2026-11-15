@@ -18,10 +18,47 @@ The captured session is `initialize` → `notifications/initialized` →
 four tools and invoking one — the first time any real client has completed
 a session against this server.
 
-`goldens_test.go` replays `in.jsonl` and compares against `out.jsonl` frame
-by frame. One field is not compared literally: `serverInfo.version` is the
-build stamp, so it is asserted equal to `buildinfo.Version` instead of
-frozen — stricter than skipping it, since a wrong value still fails.
+## The capture-and-replay contract
+
+Every capture lives at `goldens/<client>/<client_version>/`, optionally with
+a purpose suffix (`<client_version>-<purpose>`), and holds three files:
+
+| File | What it is |
+|---|---|
+| `in.jsonl` | every frame the client sent, in order; never edited |
+| `out.jsonl` | every frame cascade answered with, one per request |
+| `capture.json` | provenance: `client`, `client_version`, `protocol_version`, `captured_at`, `command`, and optional `profile` and `needs` |
+
+Each capture also has one row in the table below.
+`replay_harness_test.go` is the harness (test-only code): `ReadCapture` loads a directory, `Replay` drives `in.jsonl`
+through the production `Server` and `Dispatch` (one output line per
+request, none per notification), `CompareFrames` compares the answers with
+`out.jsonl` byte for byte after JSON canonicalisation, and `ReplayAll`
+walks every directory holding an `in.jsonl`.
+`TestMCPGoldensReplayAllCaptures` runs it over this tree. A directory with
+no `capture.json`, no row here or no named client fails; so does a tree
+with no capture at all.
+
+One field is not compared literally: `serverInfo.version` is the build
+stamp, so the replayed value must equal `buildinfo.Version` and the
+recorded one is ignored. That is stricter than skipping it, since a wrong
+value still fails.
+
+A capture with `"needs": "daemon"` forwards its tools to a daemon.
+`ReplayAll` skips it; the test that owns it replays it against one. An
+empty `profile` means the full tool set from before tool profiles.
+
+**What `out.jsonl` proves.** It is a regression golden of this server's
+answers, not the conformance evidence. Conformance is the real client
+completing the captured session. So a change in what the server answers is
+a legitimate re-capture: regenerate `out.jsonl` with
+`go test ./internal/mcp/ -run TestMCPGoldensReplayAllCaptures -update-goldens`,
+which replays the unchanged `in.jsonl`, and review the diff.
+
+| Capture | Client | Version | Protocol | Captured | Command |
+|---|---|---|---|---|---|
+| `claude-code/2.1.273` | claude-code | 2.1.273 | 2025-11-25 | 2026-09-16 | `claude -p --mcp-config <file> "list the cascade tools"` |
+| `claude-code/delegate` | claude-code | 2.1.273 | 2025-11-25 | n/a | the delegate tool call; `needs: daemon`, replayed by its own tool-spec test |
 
 ## Why there is no self-authored fixture any more
 
@@ -64,13 +101,31 @@ schema here, which would describe arguments no handler reads.
 
 ## Re-capturing
 
+Captures never write an operator or profile config. Serve with
+`cascade mcp serve --stdio --capture <dir>`, which tees both directions to
+`<dir>/{in,out}.jsonl`.
+
+The `claude` client, through a throwaway `.mcp.json` and the fleet-only
+logged-in profile (point the client's config directory at
+`$CASCADE_CLAUDE_EVAL_CONFIG_DIR` first):
+
 ```
-cascade mcp serve --stdio --capture <dir>     # via a throwaway .mcp.json
-claude -p --mcp-config <file> "list the cascade tools"
+claude -p --strict-mcp-config \
+  --mcp-config <throwaway file> "list the cascade tools, then call cascade_backup_list"
 ```
 
-Copy `<dir>/{in,out}.jsonl` into a directory named for the client version.
-Never hand-edit a golden: if the bytes changed, either the server changed
-or the client did, and both are things a person should look at.
+codex, with its normal home and the server passed as overrides (no config
+write):
+
+```
+codex exec -c 'mcp_servers.cascade.command="<abs cascade>"' \
+  -c 'mcp_servers.cascade.args=["mcp","serve","--stdio","--capture","<dir>"]' \
+  "list the cascade tools, then call cascade_backup_list"
+```
+
+Copy `<dir>/{in,out}.jsonl` into a directory named for the client version,
+write its `capture.json`, and add its row above. Never hand-edit a golden:
+if the bytes changed, either the server changed or the client did, and both
+are things a person should look at.
 
 Scrubbed 2026-09-29: private identifiers replaced by neutral synthetic values (identity fields, account and lane ids, client and host names); values replaced, shapes unchanged.
