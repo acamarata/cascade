@@ -242,3 +242,27 @@ func ExampleNew() {
 	fmt.Println(err)
 	// Output: not-found: provider "openai" not configured
 }
+
+// TestUnsupportedPlatformHelper verifies that UnsupportedPlatform produces
+// KindUnsupported, ExitUnsupported exit code, and preserves reason data.
+func TestUnsupportedPlatformHelper(t *testing.T) {
+	err := cascade.UnsupportedPlatform("x.cap", "windows")
+	if err.Kind != cascade.KindUnsupported {
+		t.Errorf("Kind = %v, want KindUnsupported", err.Kind)
+	}
+	if code := err.Kind.ExitCode(); code != cascade.ExitUnsupported {
+		t.Errorf("ExitCode = %d, want ExitUnsupported (%d)", code, cascade.ExitUnsupported)
+	}
+	if err.Data == nil {
+		t.Fatal("Data is nil, want reason data")
+	}
+	if got, want := err.Data["reason"], "unsupported_platform"; got != want {
+		t.Errorf("Data[\"reason\"] = %q, want %q", got, want)
+	}
+	if got, want := err.Data["capability"], "x.cap"; got != want {
+		t.Errorf("Data[\"capability\"] = %q, want %q", got, want)
+	}
+	if got, want := err.Data["goos"], "windows"; got != want {
+		t.Errorf("Data[\"goos\"] = %q, want %q", got, want)
+	}
+}

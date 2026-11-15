@@ -46,6 +46,9 @@ func NewThreadCommands(store ThreadStore, clock Clock) (*ThreadCommands, error) 
 	}, nil
 }
 
+// ErrTimeout is returned when a wait operation exceeds its timeout.
+var ErrTimeout = errors.New("thread wait timeout")
+
 // Send appends a message to the specified thread's log.
 // It returns ErrInvalidThreadInput if the threadID or message is empty.
 // Whitespace is considered valid literal content.
@@ -55,4 +58,34 @@ func (c *ThreadCommands) Send(threadID, message string) error {
 		return ErrInvalidThreadInput
 	}
 	return c.store.Append(threadID, message)
+}
+
+// Wait blocks until the specified thread is done or the timeout expires.
+// It returns ErrInvalidThreadInput if the receiver is zero-value, timeout is <= 0,
+// or the completion channel is nil.
+// It propagates any errors returned by the underlying store's Done method.
+// If the timeout fires, it rechecks the completion channel to favor simultaneous readiness.
+func (c *ThreadCommands) Wait(threadID string, timeout time.Duration) error {
+	if c == nil || c.store == nil || timeout <= 0 {
+		return ErrInvalidThreadInput
+	}
+	ch, err := c.store.Done(threadID)
+	if err != nil {
+		return err
+	}
+	if ch == nil {
+		return ErrInvalidThreadInput
+	}
+
+	select {
+	case <-ch:
+		return nil
+	case <-c.clock.After(timeout):
+		select {
+		case <-ch:
+			return nil
+		default:
+			return ErrTimeout
+		}
+	}
 }

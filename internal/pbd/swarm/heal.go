@@ -41,6 +41,28 @@ func DefaultHealConfig() HealConfig {
 	}
 }
 
+// DetectStaleRuns scans a slice of StaleRun records and returns those
+// requiring healing: stale-base, supervisor-refused, or no-file-change.
+// It returns ErrNoCurrentMain if currentMain is empty, and ErrEmptyRunName
+// if any run has an empty RunName.
+func DetectStaleRuns(runs []StaleRun, currentMain string) ([]StaleRun, error) {
+	if currentMain == "" {
+		return nil, ErrNoCurrentMain
+	}
+
+	var result []StaleRun
+	for _, r := range runs {
+		if r.RunName == "" {
+			return nil, ErrEmptyRunName
+		}
+		switch r.Reason {
+		case "stale-base", "supervisor-refused", "no-file-change":
+			result = append(result, r)
+		}
+	}
+	return result, nil
+}
+
 // HealResult captures the outcome of a single heal operation.
 type HealResult struct {
 	// RenamedTo holds the new run name if the run was renamed.

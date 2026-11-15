@@ -52,50 +52,47 @@ func TestStaleBaseDetected_HELM13(t *testing.T) {
 	}
 }
 
-// TestStaleBaseDetected exercises additional type construction and validation scenarios.
+// TestStaleBaseDetected_HELM14 verifies input validation for DetectStaleRuns.
+func TestStaleBaseDetected_HELM14(t *testing.T) {
+	_, err := DetectStaleRuns(nil, "")
+	if !errors.Is(err, ErrNoCurrentMain) {
+		t.Errorf("expected ErrNoCurrentMain when currentMain is empty, got %v", err)
+	}
+
+	runs := []StaleRun{{RunName: "", Reason: "stale-base"}}
+	_, err = DetectStaleRuns(runs, "main")
+	if !errors.Is(err, ErrEmptyRunName) {
+		t.Errorf("expected ErrEmptyRunName for empty RunName, got %v", err)
+	}
+}
+
+// TestStaleBaseDetected verifies detection filtering for stale runs.
 func TestStaleBaseDetected(t *testing.T) {
-	sr := StaleRun{
-		RunName:      "run-456",
-		Reason:       "supervisor-refused",
-		AttemptCount: 3,
-		Timestamp:    time.Now(),
-	}
-	if sr.RunName == "" {
-		t.Error("RunName should not be empty")
-	}
-
-	hc := HealConfig{
-		DryRun:      false,
-		CurrentMain: "main",
-	}
-	if hc.DryRun {
-		t.Error("DryRun should be false when explicitly set")
-	}
-	if hc.CurrentMain != "main" {
-		t.Errorf("expected CurrentMain 'main', got %q", hc.CurrentMain)
+	now := time.Now()
+	runs := []StaleRun{
+		{RunName: "run-1", Reason: "stale-base", Timestamp: now},
+		{RunName: "run-2", Reason: "supervisor-refused", Timestamp: now},
+		{RunName: "run-3", Reason: "no-file-change", Timestamp: now},
+		{RunName: "run-4", Reason: "other-reason", Timestamp: now},
+		{RunName: "run-5", Reason: "stale-base", Timestamp: now},
 	}
 
-	hr := HealResult{
-		RenamedTo:       "run-456-v2",
-		ReopenedTickets: []string{"TICKET-1", "TICKET-2"},
-		CarriedAttempts: 3,
-		Applied:         true,
+	filtered, err := DetectStaleRuns(runs, "main")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !hr.Applied {
-		t.Error("Applied should be true")
-	}
-	if len(hr.ReopenedTickets) != 2 {
-		t.Errorf("expected 2 ReopenedTickets, got %d", len(hr.ReopenedTickets))
-	}
-	if hr.CarriedAttempts != 3 {
-		t.Errorf("expected CarriedAttempts 3, got %d", hr.CarriedAttempts)
-	}
-	if hr.RenamedTo != "run-456-v2" {
-		t.Errorf("expected RenamedTo 'run-456-v2', got %q", hr.RenamedTo)
+	if len(filtered) != 4 {
+		t.Fatalf("expected 4 filtered runs, got %d", len(filtered))
 	}
 
-	hrZero := HealResult{}
-	if hrZero.Applied {
-		t.Error("zero-value HealResult should have Applied false")
+	names := map[string]bool{}
+	for _, r := range filtered {
+		names[r.RunName] = true
+	}
+	if !names["run-1"] || !names["run-2"] || !names["run-3"] || !names["run-5"] {
+		t.Errorf("missing expected runs in filtered output")
+	}
+	if names["run-4"] {
+		t.Errorf("run-4 should not be included")
 	}
 }

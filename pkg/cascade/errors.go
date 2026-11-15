@@ -41,6 +41,9 @@ type Error struct {
 	// Err is the wrapped inner error, or nil. Unwrap exposes it so
 	// errors.Is/errors.As traverse through it.
 	Err error
+	// Data carries structured reason data for wire serialization. It is
+	// additive; nil keeps HEAD behaviour.
+	Data map[string]string
 }
 
 // Error implements the error interface. The format is "<kind>: <msg>", or
@@ -147,3 +150,18 @@ var (
 	ErrIntegrity         = &Error{Kind: KindIntegrity}
 	ErrInternal          = &Error{Kind: KindInternal}
 )
+
+// UnsupportedPlatform constructs a KindUnsupported error reporting that
+// capability is not implemented on goos. It carries capability and goos as
+// structured reason data accessible for wire serialization.
+func UnsupportedPlatform(capability, goos string) *Error {
+	return &Error{
+		Kind: KindUnsupported,
+		Msg:  fmt.Sprintf("platform %q does not support %s", goos, capability),
+		Data: map[string]string{
+			"reason":     "unsupported_platform",
+			"capability": capability,
+			"goos":       goos,
+		},
+	}
+}
