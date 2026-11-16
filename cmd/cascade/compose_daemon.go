@@ -31,12 +31,14 @@ import (
 	"log/slog"
 	"os"
 	"sort"
+	"sync/atomic"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
 	"github.com/acamarata/cascade/internal/events"
 	"github.com/acamarata/cascade/internal/jobs"
 	"github.com/acamarata/cascade/internal/memory"
+	"github.com/acamarata/cascade/internal/nodes"
 	"github.com/acamarata/cascade/internal/principal"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -130,6 +132,15 @@ type daemonRuntime struct {
 	// ProviderRegistry is the provider registry reader the status-widget
 	// registration (phaseOptions) opens; the completion gate reads it.
 	ProviderRegistry provider.ProviderRegistryReader
+	// NodeFacing is the controller's node-only registry and Rendezvous the
+	// dispatch rendezvous its claim and report verbs serve; the node-channel
+	// registration (phaseFleet, Order 30) sets both on the controller.
+	NodeFacing *nodes.NodeFacing
+	Rendezvous *nodes.Rendezvous
+	// NodeChannel is allocated before any registration runs and stored once
+	// by the node-channel registration, so a reader wired in an earlier
+	// phase loads it per call. A pointer: daemonRuntime is copied by value.
+	NodeChannel *atomic.Pointer[nodes.NodeChannel]
 }
 
 // Reconcile brings the snapshot in line with names, the credentialNames of a
@@ -242,6 +253,9 @@ func sortedDaemonRegistrations(regs []daemonRegistration) []daemonRegistration {
 func runDaemonWiring(w *daemonWiring) error {
 	if err := validateDaemonRegistrations(daemonRegistrations); err != nil {
 		return err
+	}
+	if w.Deps.NodeChannel == nil {
+		w.Deps.NodeChannel = new(atomic.Pointer[nodes.NodeChannel])
 	}
 	for _, r := range sortedDaemonRegistrations(daemonRegistrations) {
 		if err := r.Wire(w); err != nil {

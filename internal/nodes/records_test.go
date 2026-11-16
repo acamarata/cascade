@@ -9,37 +9,6 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-// memRecordBackend is an in-memory RecordBackend fake for tests. Also used
-// to simulate a corrupt/unavailable store.
-type memRecordBackend struct {
-	records map[string]DeviceRecord
-	loadErr error
-	saveErr error
-}
-
-func newMemRecordBackend() *memRecordBackend {
-	return &memRecordBackend{records: map[string]DeviceRecord{}}
-}
-
-func (m *memRecordBackend) Load() (map[string]DeviceRecord, error) {
-	if m.loadErr != nil {
-		return nil, m.loadErr
-	}
-	out := map[string]DeviceRecord{}
-	for k, v := range m.records {
-		out[k] = v
-	}
-	return out, nil
-}
-
-func (m *memRecordBackend) Save(records map[string]DeviceRecord) error {
-	if m.saveErr != nil {
-		return m.saveErr
-	}
-	m.records = records
-	return nil
-}
-
 func testIdentity(t *testing.T, seed string) Identity {
 	t.Helper()
 	id, _, err := GenerateIdentity(strings.NewReader(strings.Repeat(seed, 64)))

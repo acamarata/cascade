@@ -1,7 +1,8 @@
 // Purpose: keep the controller's node tunnels in step with live record
 //   state. Every ReconcileInterval tick, and on each change notification,
-//   a revoked, removed or drained node's tunnel is stopped and a node
-//   enrolled with a complete route gets one started.
+//   a revoked or removed node's tunnel is stopped, a drained node's tunnel
+//   is stopped once no dispatch is in flight on it, and a node enrolled
+//   with a complete route gets one started.
 // Constraints: time comes only from the injected Ticker; a tunnel this
 //   channel starts records its session so Call rides the same
 //   authenticated client and nothing else.
@@ -28,6 +29,10 @@ type ReconcileDeps struct {
 	NewTicker func(time.Duration) Ticker
 	// Changes carries record-store change notifications; nil means ticks only.
 	Changes <-chan struct{}
+	// Rendezvous holds the dispatches published on nodes. A drained node
+	// with one still awaiting its report keeps its tunnel, so heartbeats
+	// and that report still arrive; nil means nothing is in flight.
+	Rendezvous *Rendezvous
 }
 
 // SetReconcileDeps installs d before Reconcile runs.
@@ -50,7 +55,7 @@ func (c *NodeChannel) Reconcile(ctx context.Context) {
 	ticker := newTicker(ReconcileInterval)
 	defer ticker.Stop()
 	for {
-		c.reconcileOnce(ctx, d.Configure)
+		c.reconcileOnce(ctx, d)
 		select {
 		case <-ctx.Done():
 			return
@@ -61,37 +66,37 @@ func (c *NodeChannel) Reconcile(ctx context.Context) {
 }
 
 // reconcileOnce stops every registered tunnel whose node is no longer
-// wanted and starts the wanted ones that are not registered. A failed
-// record read changes nothing: the next pass retries.
-func (c *NodeChannel) reconcileOnce(ctx context.Context, configure func(Target, Route) TunnelConfig) {
+// kept and starts the wanted ones that are not registered. A failed record
+// read changes nothing: the next pass retries.
+func (c *NodeChannel) reconcileOnce(ctx context.Context, d ReconcileDeps) {
 	recs, err := c.records.List()
 	if err != nil {
 		return
 	}
 	wanted := make(map[string]bool, len(recs))
+	keep := make(map[string]bool, len(recs))
 	for _, rec := range recs {
-		if channelWanted(rec) {
-			wanted[rec.NodeID] = true
-		}
+		wanted[rec.NodeID] = channelWanted(rec)
+		keep[rec.NodeID] = wanted[rec.NodeID] || drainingInFlight(rec, d.Rendezvous)
 	}
 	for _, nodeID := range c.registered() {
-		if !wanted[nodeID] {
+		if !keep[nodeID] {
 			c.m.Stop(nodeID)
 			c.dropSession(nodeID, nil)
 		}
 	}
-	if configure == nil || ctx.Err() != nil {
+	if d.Configure == nil || ctx.Err() != nil {
 		return
 	}
-	for nodeID := range wanted {
-		if _, running := c.m.State(nodeID); running {
+	for nodeID, want := range wanted {
+		if _, running := c.m.State(nodeID); !want || running {
 			continue
 		}
 		target, route, err := c.records.Target(nodeID)
 		if err != nil {
 			continue
 		}
-		cfg := configure(target, route)
+		cfg := d.Configure(target, route)
 		cfg.Target = target
 		cfg.RemoteSocketPath = path.Join(route.SocketDir, ControllerSocketName)
 		cfg.Dialer = trackingDialer{inner: cfg.Dialer, c: c, nodeID: nodeID}
@@ -103,6 +108,22 @@ func (c *NodeChannel) reconcileOnce(ctx context.Context, configure func(Target, 
 // complete route.
 func channelWanted(rec DeviceRecord) bool {
 	return !SignatureRevoked(rec, rec.PubKeyB64) && !rec.Drained && rec.NodeRoute.complete()
+}
+
+// drainingInFlight: a drained, unrevoked node with a dispatch published on
+// it that has not reported yet. Its tunnel stays until that report lands.
+func drainingInFlight(rec DeviceRecord, rv *Rendezvous) bool {
+	if rv == nil || !rec.Drained || SignatureRevoked(rec, rec.PubKeyB64) {
+		return false
+	}
+	rv.mu.Lock()
+	defer rv.mu.Unlock()
+	for _, p := range rv.pending {
+		if p.attempt.NodeID == rec.NodeID {
+			return true
+		}
+	}
+	return false
 }
 
 // registered lists the node ids with a tunnel in the Manager.
