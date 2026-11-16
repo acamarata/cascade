@@ -119,6 +119,9 @@ func completionLedger(ctx context.Context, store provider.Store, clock runtime.C
 	if err := jobs.ApplyEvidenceSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
 		return nil, nil, err
 	}
+	if err := jobs.ApplyGateAttemptsSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		return nil, nil, err
+	}
 	// db is intentionally not closed here: it lives for the daemon
 	// process's lifetime, the same disclosed gap wireJobRPC's own call
 	// site (daemon_unix_run_fleetjobs.go) already carries.
@@ -192,6 +195,19 @@ func nextCompletionTarget(state jobs.JobState) jobs.JobState {
 // CompletionCheck implements hookpacks.PolicyGate over the real
 // completion-gate engine.
 func (g *completionPolicyGate) CompletionCheck(ctx context.Context, jobID string) (bool, string, error) {
+	ok, reason, err := g.completionVerdict(ctx, jobID)
+	if err == nil && !ok {
+		// One durable attempt per policy denial; a failed record fails closed.
+		if _, rerr := g.store.RecordGateDenial(ctx, jobID, reason); rerr != nil && !cascade.HasKind(rerr, cascade.KindNotFound) {
+			// A job with no execution has nothing to count; the denial stands.
+			return false, "", rerr
+		}
+	}
+	return ok, reason, err
+}
+
+// completionVerdict is the gate's verdict before denial recording.
+func (g *completionPolicyGate) completionVerdict(ctx context.Context, jobID string) (bool, string, error) {
 	job, found, err := g.store.GetJob(ctx, jobID)
 	if err != nil {
 		return false, "", err

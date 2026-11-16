@@ -119,6 +119,11 @@ func buildStall(w *daemonWiring) (stallParts, error) {
 	if err != nil {
 		return stallParts{}, err
 	}
+	if w.Deps.Fleet != nil {
+		if err := wireGateStallActions(w.Ctx, det, w.Deps.Fleet, w.Clock); err != nil {
+			return stallParts{}, err
+		}
+	}
 	return stallParts{detector: det, attention: attention, drainer: daemon.NewLiveDirectiveDrainer(sess, directives)}, nil
 }
 

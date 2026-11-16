@@ -60,6 +60,9 @@ func setupCompletionGate(t *testing.T) (*completionPolicyGate, *completionJobRes
 	if err := jobs.ApplyEvidenceSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
 		t.Fatalf("ApplyEvidenceSchema: %v", err)
 	}
+	if err := jobs.ApplyGateAttemptsSchema(ctx, db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyGateAttemptsSchema: %v", err)
+	}
 
 	jstore := jobs.NewStore(db)
 	authz := jobs.NewProducerAuthz(jstore, func() bool { return true }, nil)
