@@ -68,3 +68,21 @@ func OpenCompleteChat(projectID, templateText string) (*TouchpointChat, error) {
 		ProjectID:    projectID,
 	}, nil
 }
+
+// ConfirmPlan simulates the forge confirmation flow by transitioning
+// a Planning chat in Waiting state to Archived state.
+// It returns an error if chat is nil, if Kind is not Planning, or if State is already Archived.
+func ConfirmPlan(chat *TouchpointChat) error {
+	if chat == nil {
+		return errors.New("chat cannot be nil")
+	}
+	if chat.Kind != PlanningKind {
+		return errors.New("chat kind must be Planning")
+	}
+	if chat.State == ArchivedState {
+		return errors.New("chat is already archived")
+	}
+
+	chat.State = ArchivedState
+	return nil
+}

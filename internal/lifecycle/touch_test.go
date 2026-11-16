@@ -151,3 +151,54 @@ func TestCompleteChatOpensAtRTD(t *testing.T) {
 		t.Error("Expected nil chat when projectID is empty")
 	}
 }
+
+// TestConfirmPlanArchivesTheChat verifies that ConfirmPlan transitions
+// a Planning chat in Waiting state to Archived state and returns errors
+// for invalid inputs.
+func TestConfirmPlanArchivesTheChat(t *testing.T) {
+	// Test valid archival
+	chat, err := OpenPlanningChat("proj-789", "Plan text")
+	if err != nil {
+		t.Fatalf("OpenPlanningChat failed: %v", err)
+	}
+
+	if chat.State != WaitingState {
+		t.Fatalf("Expected initial state WaitingState, got %v", chat.State)
+	}
+
+	err = ConfirmPlan(chat)
+	if err != nil {
+		t.Errorf("ConfirmPlan returned unexpected error: %v", err)
+	}
+
+	if chat.State != ArchivedState {
+		t.Errorf("Expected state ArchivedState after confirmation, got %v", chat.State)
+	}
+
+	// Test nil chat error
+	err = ConfirmPlan(nil)
+	if err == nil {
+		t.Error("Expected error for nil chat, got nil")
+	}
+
+	// Test non-Planning kind error
+	completeChat, err := OpenCompleteChat("proj-789", "Complete text")
+	if err != nil {
+		t.Fatalf("OpenCompleteChat failed: %v", err)
+	}
+	err = ConfirmPlan(completeChat)
+	if err == nil {
+		t.Error("Expected error for non-Planning kind, got nil")
+	}
+
+	// Test already archived error
+	archivedChat, err := OpenPlanningChat("proj-789", "Archived plan text")
+	if err != nil {
+		t.Fatalf("OpenPlanningChat failed: %v", err)
+	}
+	archivedChat.State = ArchivedState
+	err = ConfirmPlan(archivedChat)
+	if err == nil {
+		t.Error("Expected error for already archived chat, got nil")
+	}
+}
