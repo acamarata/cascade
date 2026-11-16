@@ -5395,5 +5395,29 @@
     "reason": "P2-COP-23 ships NeedsRebuild with tests; P2-COP-24 is the first later ticket that names it and creates internal/supervise/watch.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/supervise/watch.go exists without the reference.",
     "retire_ticket": "P2-COP-24",
     "symbol": "internal/supervise.NeedsRebuild"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-34",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls SupervisorReview; retire this entry once that file calls it",
+    "reason": "P2-GBGA-34 ships SupervisorReview with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.SupervisorReview"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-49",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls VerifyApprovalDigest; retire this entry once that file calls it",
+    "reason": "P2-GBGA-49 ships VerifyApprovalDigest with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.VerifyApprovalDigest"
+  },
+  {
+    "added_by_ticket": "P2-GBRK-03b",
+    "caller_site": "internal/monitor/broker/wire_gbrk.go",
+    "expected_caller": "internal/monitor/broker/wire_gbrk.go, the P2-WIRE-11 wiring of P2-BRK, which calls CapacityLimit; retire this entry once that file calls it",
+    "reason": "P2-GBRK-03b ships CapacityLimit with tests as a P2 gap unit; P2-WIRE-11 wires it into its home P2-BRK once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/monitor/broker/wire_gbrk.go exists without the call.",
+    "retire_ticket": "P2-WIRE-11",
+    "symbol": "internal/monitor/broker.CapacityLimit"
   }
 ]
