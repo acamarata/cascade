@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-16T09:01:08Z",
+  "generated_at": "2026-11-16T10:09:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -24855,7 +24855,7 @@
         },
         {
           "file": "internal/daemon/subsystems_scheduler_events.go",
-          "line": 33,
+          "line": 34,
           "status": "ADD",
           "ticket": "P1-E29-W6-S59-T5",
           "raw": "internal/daemon (ADD, merge-fix for P1-E29-W6-S59-T5)."
@@ -24866,6 +24866,12 @@
           "status": "",
           "ticket": "P1-E29-W6-S59-T5",
           "raw": "internal/daemon (TEST, merge-fix for P1-E29-W6-S59-T5)."
+        },
+        {
+          "file": "internal/daemon/subsystems_scheduler_reserve_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "internal/daemon (EXTEND)."
         },
         {
           "file": "internal/daemon/subsystems_scheduler_resume_test.go",
@@ -45258,7 +45264,7 @@
       ]
     }
   ],
-  "total_sites": 4358,
+  "total_sites": 4359,
   "unspecified_count": 428,
   "multi_status_count": 134
 }
