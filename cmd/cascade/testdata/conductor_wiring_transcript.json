@@ -1,0 +1,40 @@
+{
+  "frames": [
+    {
+      "direction": "request",
+      "method": "conductor.execute",
+      "params": {
+        "task_id": "t1",
+        "task_class": "chat",
+        "sensitivity": "public",
+        "inputs": [
+          {
+            "role": "user",
+            "content": "hello"
+          }
+        ]
+      }
+    },
+    {
+      "direction": "reply",
+      "error": {
+        "code": -32004,
+        "message": "unavailable: conductor: security pipeline not ready"
+      }
+    },
+    {
+      "direction": "request",
+      "method": "conductor.execute",
+      "params": {
+        "sensitivity": 3
+      }
+    },
+    {
+      "direction": "reply",
+      "error": {
+        "code": -32002,
+        "message": "invalid-input: conductor.execute: decode params: json: cannot unmarshal number into Go struct field conductorExecuteParams.sensitivity of type string"
+      }
+    }
+  ]
+}
