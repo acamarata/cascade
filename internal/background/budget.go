@@ -47,6 +47,7 @@ func NewLedger() *Ledger {
 // Counts from zero through the inclusive maxima are valid.
 // Any negative count or nil receiver returns VerdictRejected, ErrInvalidBudget.
 // A zero request is valid and returns VerdictAccepted, nil.
+// Non-parallel requests that exceed the limits return VerdictRejected, ErrOverage.
 func (l *Ledger) Admit(r Request) (Verdict, error) {
 	if l == nil {
 		return VerdictRejected, ErrInvalidBudget
@@ -56,8 +57,10 @@ func (l *Ledger) Admit(r Request) (Verdict, error) {
 		return VerdictRejected, ErrInvalidBudget
 	}
 
-	if r.Rollouts > MaxRollouts || r.Improvements > MaxImprovements {
-		return VerdictRejected, ErrOverage
+	if !r.Parallel {
+		if r.Rollouts > MaxRollouts || r.Improvements > MaxImprovements {
+			return VerdictRejected, ErrOverage
+		}
 	}
 
 	return VerdictAccepted, nil
