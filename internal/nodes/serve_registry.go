@@ -1,7 +1,8 @@
-// Purpose: the node agent's RPC registry (node.enroll, node.heartbeat and
+// Purpose: the node agent's RPC registry (node.enroll and the dispatch leg)
 //
-//	the dispatch leg) behind the elevation middleware, split out of
-//	serve.go under the 300-line file cap.
+//	behind the elevation middleware, split out of serve.go under the
+//	300-line file cap. node.heartbeat is node-originated: the controller
+//	serves it on the node-facing registry, never node serve.
 //
 // Inputs: a ServeDeps from the CLI composition root.
 // Outputs: BuildServeRegistry.
@@ -46,11 +47,16 @@ func refuseAllElevation(clock Clock) rpc.MiddlewareFunc {
 	})
 }
 
-// BuildServeRegistry mounts node.enroll (S-36.T1's RegisterHandlers) and
-// node.heartbeat (this ticket's RegisterHeartbeatHandler) on a fresh
-// *rpc.Registry — the node agent's complete RPC surface as of this
-// ticket. internal/nodes is an internal/rpc SERVER package (it is allowed
-// to name rpc.Registry); the CLI composition root (cmd/cascade/node_serve.go)
+// BuildServeRegistry mounts node.enroll (S-36.T1's RegisterHandlers) and,
+// with a durable action log, the node-side execute leg on a fresh
+// *rpc.Registry: the node agent's complete RPC surface. It does not mount
+// node.heartbeat. A heartbeat is something a node SENDS to its controller
+// over the channel, so only NodeFacing serves it, against the channel
+// identity; a node serve that answered it would accept a liveness claim
+// from whoever reached its socket.
+//
+// internal/nodes is an internal/rpc SERVER package (it is allowed to name
+// rpc.Registry); the CLI composition root (cmd/cascade/node_serve.go)
 // is a client of THIS package instead, through NewServeRegistry below,
 // because cmd/cascade may never import internal/rpc directly (the
 // cmd-rpc-server boundary, internal/client/boundary_test.go). serve_test.go
@@ -76,12 +82,6 @@ func BuildServeRegistry(deps ServeDeps) *rpc.Registry {
 		ControllerNodeID:    deps.Self.NodeID,
 		ControllerPubKeyB64: deps.Self.PubKeyB64(),
 	}, deps.Precondition)
-	RegisterHeartbeatHandler(registry, HeartbeatDeps{
-		Records:   deps.Records,
-		Sequences: deps.Sequences,
-		Clock:     deps.Clock,
-		Timeout:   deps.Timeout,
-	})
 	// The node-side dispatch leg (S-37.T2). Mounted only when the
 	// composition root supplied a durable action log: without one there is
 	// no dedup, and a node that answers a redelivered action twice is

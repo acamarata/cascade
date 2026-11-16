@@ -147,8 +147,12 @@ func startDispatchController(t *testing.T, rendezvous *Rendezvous) (net.Listener
 	// cannot prove owns the socket, so a TCP listener here would be
 	// testing a configuration that never ships.
 	controller := &http.Server{
-		Handler:           registry.Handler(),
-		ConnContext:       ConnContext,
+		Handler: registry.Handler(),
+		// The tunnel carries the one node "real-node", so every call on it
+		// arrives with that channel identity, as NodeFacing stamps it.
+		ConnContext: func(ctx context.Context, c net.Conn) context.Context {
+			return WithChannelIdentity(ConnContext(ctx, c), ChannelIdentity{NodeID: "real-node"})
+		},
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	// A short base dir: a unix socket path is capped near 104 bytes and

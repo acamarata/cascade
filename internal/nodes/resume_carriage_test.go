@@ -194,7 +194,7 @@ func claimWhenOfferedTo(t *testing.T, reg *rpc.Registry, nodeID string, into *Cl
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		res, errObj := callVerb(t, reg, DispatchClaimMethod, `{"node_id":"`+nodeID+`"}`)
+		res, errObj := claimAs(t, reg, nodeID)
 		if errObj == nil {
 			remarshal(t, res, into)
 			return

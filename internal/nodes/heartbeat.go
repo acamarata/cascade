@@ -246,8 +246,8 @@ func reportErr(onError func(error), err error) {
 // directly onto dial's connection (the ssh tunnel's local end, D-24) via
 // plain req.Write/http.ReadResponse — never http.Transport, so this sink
 // needs no net.Conn, only this package's own Conn. Speaks internal/rpc's
-// exact JSON-RPC 2.0 envelope, interoperating with BuildServeRegistry's
-// node.heartbeat handler unchanged.
+// exact JSON-RPC 2.0 envelope, interoperating with the node-facing
+// registry's node.heartbeat handler (NodeFacing) unchanged.
 func NewTunnelHeartbeatSender(dial func(ctx context.Context) (Conn, error)) HeartbeatSender {
 	return func(ctx context.Context, f HeartbeatFrame) error {
 		conn, err := dial(ctx)

@@ -32,6 +32,17 @@ func callVerb(t *testing.T, reg *rpc.Registry, method, params string) (any, *rpc
 	return reg.Dispatch(context.Background(), req)
 }
 
+// claimAs sends a claim naming nodeID over a channel whose identity is
+// nodeID, which is how every claim reaches the controller.
+func claimAs(t *testing.T, reg *rpc.Registry, nodeID string) (any, *rpc.ErrorObject) {
+	t.Helper()
+	req, errObj := rpc.Parse([]byte(`{"jsonrpc":"2.0","method":"` + DispatchClaimMethod + `","params":{"node_id":"` + nodeID + `"},"id":1}`))
+	if errObj != nil {
+		t.Fatalf("Parse: %+v", errObj)
+	}
+	return reg.Dispatch(WithChannelIdentity(context.Background(), ChannelIdentity{NodeID: nodeID}), req)
+}
+
 // TestANodeClaimsAnAttemptAndReportsItBack walks the node's whole callback
 // path over the mounted verbs: claim the waiting attempt, then report its
 // outcome. Both must reach the rendezvous, not a handler that validates and
@@ -141,7 +152,7 @@ func claimWhenOffered(t *testing.T, reg *rpc.Registry, into *ClaimResponse) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		res, errObj := callVerb(t, reg, DispatchClaimMethod, `{"node_id":"n1"}`)
+		res, errObj := claimAs(t, reg, "n1")
 		if errObj == nil {
 			remarshal(t, res, into)
 			return

@@ -246,17 +246,24 @@ type ClaimResponse struct {
 // verbs against rv.
 //
 // Neither verb trusts its caller's word about which dispatch it is
-// answering: Claim hands out only the attempt placed on THAT node, and
+// answering. Claim takes the calling node from the channel identity in ctx,
+// never from params: a claim whose node_id differs from the channel, or
+// that arrives with no channel, is refused before the rendezvous is
+// touched, and only the attempt placed on THAT node is handed out. And
 // Report is matched on {dispatch, attempt, node} before the frame is
 // admitted — the signature check itself runs later, on the ship leg, where
 // the device record and sequence store live.
 func RegisterDispatchNodeHandlers(registry *rpc.Registry, rv *Rendezvous) {
-	registry.Register(DispatchClaimMethod, func(_ context.Context, params json.RawMessage) (any, error) {
+	registry.Register(DispatchClaimMethod, func(ctx context.Context, params json.RawMessage) (any, error) {
 		var req ClaimRequest
 		if err := decodeParams(params, &req, DispatchClaimMethod); err != nil {
 			return nil, err
 		}
-		attempt, err := rv.Claim(req.NodeID)
+		if err := RequireChannelNode(ctx, req.NodeID); err != nil {
+			return nil, err
+		}
+		channel, _ := ChannelIdentityFrom(ctx)
+		attempt, err := rv.Claim(channel.NodeID)
 		if err != nil {
 			return nil, err
 		}

@@ -122,9 +122,10 @@ func newServeDeps(t *testing.T) ServeDeps {
 	}
 }
 
-// TestBuildServeRegistry_EndToEndThroughDispatch proves BuildServeRegistry
-// is the real, load-bearing composition: node.heartbeat dispatches
-// through the exact registry cmd/cascade/node_serve.go serves.
+// TestBuildServeRegistry_EndToEndThroughDispatch drives a correctly signed
+// heartbeat from an enrolled node through the exact registry
+// cmd/cascade/node_serve.go serves: it is method-not-found there, because
+// only the controller's node-facing registry serves heartbeats.
 func TestBuildServeRegistry_EndToEndThroughDispatch(t *testing.T) {
 	deps := newServeDeps(t)
 	id := testIdentity(t, "peer")
@@ -143,8 +144,17 @@ func TestBuildServeRegistry_EndToEndThroughDispatch(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: "node.heartbeat", Params: raw})
-	if errObj != nil {
-		t.Fatalf("dispatch failed: %+v", errObj)
+	if errObj == nil || errObj.Code != -32601 {
+		t.Fatalf("a signed heartbeat on node serve = %+v, want method-not-found (-32601)", errObj)
+	}
+}
+
+// TestServeRegistryHasNoHeartbeat: node serve has node.enroll, not node.heartbeat.
+func TestServeRegistryHasNoHeartbeat(t *testing.T) {
+	registry := BuildServeRegistry(newServeDeps(t))
+	_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: nodeHeartbeatMethod, Params: []byte(`{}`)})
+	if errObj == nil || errObj.Code != -32601 || registry.Registered(nodeHeartbeatMethod) || !registry.Registered("node.enroll") {
+		t.Fatalf("node serve: heartbeat = %+v, enroll registered %v; want heartbeat method-not-found", errObj, registry.Registered("node.enroll"))
 	}
 }
 
@@ -154,11 +164,8 @@ func TestBuildServeRegistry_EndToEndThroughDispatch(t *testing.T) {
 func TestBuildServeRegistry_WithoutCall_MethodNotFound(t *testing.T) {
 	registry := rpc.NewRegistry() // BuildServeRegistry deliberately NOT called
 	_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: "node.heartbeat", Params: []byte(`{}`)})
-	if errObj == nil {
-		t.Fatal("expected method-not-found")
-	}
-	if errObj.Code != -32601 {
-		t.Fatalf("errObj.Code = %d, want -32601", errObj.Code)
+	if errObj == nil || errObj.Code != -32601 {
+		t.Fatalf("errObj = %+v, want method-not-found (-32601)", errObj)
 	}
 }
 
@@ -276,7 +283,8 @@ func TestServeRegistryRefusesUnattestedEnroll(t *testing.T) {
 }
 
 // TestServeRegistryMountsSuppliedElevation: an explicit middleware replaces
-// the refuse-all default and is mounted verbatim.
+// the refuse-all default and is mounted verbatim. node.heartbeat is
+// method-not-found before it; node.enroll runs through it once.
 func TestServeRegistryMountsSuppliedElevation(t *testing.T) {
 	deps := newServeDeps(t)
 	ran := 0
@@ -284,8 +292,9 @@ func TestServeRegistryMountsSuppliedElevation(t *testing.T) {
 		return func(ctx context.Context, p json.RawMessage) (any, error) { ran++; return next(ctx, p) }
 	}
 	registry := BuildServeRegistry(deps)
-	_, _ = registry.Dispatch(context.Background(), &rpc.Request{Method: "node.heartbeat", Params: []byte(`{}`)})
-	if ran != 1 {
-		t.Fatalf("supplied middleware ran %d times, want 1", ran)
+	_, errObj := registry.Dispatch(context.Background(), &rpc.Request{Method: "node.heartbeat", Params: []byte(`{}`)})
+	_, _ = registry.Dispatch(context.Background(), &rpc.Request{Method: "node.enroll", Params: []byte(`{}`)})
+	if errObj == nil || errObj.Code != -32601 || ran != 1 {
+		t.Fatalf("heartbeat = %+v, middleware ran %d times; want method-not-found and 1 run (enroll)", errObj, ran)
 	}
 }
