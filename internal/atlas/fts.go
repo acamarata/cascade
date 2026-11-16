@@ -2,6 +2,7 @@
 package atlas
 
 import (
+	"database/sql"
 	"errors"
 	"regexp"
 	"strings"
@@ -96,4 +97,85 @@ func CheckLegacyBody(sqlText string) error {
 	}
 
 	return nil
+}
+
+// MigrateDropBodyWithHomes migrates body data out of the notes table.
+// It succeeds for new/empty or modern metadata-only databases, but refuses
+// populated legacy rows or populated FTS without provenance. It never silently
+// defaults, copies bodies or clears populated FTS.
+func MigrateDropBodyWithHomes(db *sql.DB, homes map[int64]string) error {
+	if db == nil {
+		return errors.New("atlas: nil db")
+	}
+
+	var name string
+	err := db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='notes'").Scan(&name)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	rows, err := db.Query("PRAGMA table_info(notes)")
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	hasBody := false
+	for rows.Next() {
+		var cid int
+		var colName, colType string
+		var notNull int
+		var defVal sql.NullString
+		var pk int
+		if err := rows.Scan(&cid, &colName, &colType, &notNull, &defVal, &pk); err != nil {
+			return err
+		}
+		if colName == "body" {
+			hasBody = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	if !hasBody {
+		return nil
+	}
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes").Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("atlas: populated legacy body rows")
+	}
+
+	var ftsName string
+	err = db.QueryRow("SELECT name FROM sqlite_master WHERE type='table' AND name='notes_fts'").Scan(&ftsName)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	var ftsCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM notes_fts").Scan(&ftsCount); err != nil {
+		return err
+	}
+	if ftsCount > 0 {
+		return errors.New("atlas: populated FTS without provenance")
+	}
+
+	return nil
+}
+
+// MigrateDropBody migrates body data out of the notes table using nil homes.
+// It delegates to MigrateDropBodyWithHomes.
+func MigrateDropBody(db *sql.DB) error {
+	return MigrateDropBodyWithHomes(db, nil)
 }

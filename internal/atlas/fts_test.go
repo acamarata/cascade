@@ -1,8 +1,12 @@
 package atlas
 
 import (
+	"database/sql"
 	"errors"
+	"path/filepath"
 	"testing"
+
+	_ "modernc.org/sqlite"
 )
 
 // legacyBodyCase is one CheckLegacyBody input and the error it must return.
@@ -91,5 +95,19 @@ func TestLegacyBodyReferenceFailsD4045(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestMigrateDropBodyEmptyDB verifies MigrateDropBody succeeds on an empty database.
+func TestMigrateDropBodyEmptyDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+	db, err := sql.Open("sqlite", dbPath)
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	defer db.Close()
+
+	if err := MigrateDropBody(db); err != nil {
+		t.Fatalf("MigrateDropBody on empty db returned error: %v", err)
 	}
 }
