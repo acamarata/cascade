@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-15T19:03:34Z",
+  "generated_at": "2026-11-16T00:14:09Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -8786,7 +8786,7 @@
         },
         {
           "file": "cmd/cascade/hooks_reviewer_test.go",
-          "line": 10,
+          "line": 8,
           "status": "ADD",
           "raw": "cmd/cascade/reviewer (ADD, P1-PBD-05)."
         },
@@ -26286,7 +26286,7 @@
       "sites": [
         {
           "file": "internal/mcp/goldens_test.go",
-          "line": 34,
+          "line": 32,
           "status": "ADD",
           "ticket": "P1-E04-W4-S86-T1",
           "raw": "internal/mcp goldens (ADD) — P1-E04-W4-S86-T1."
@@ -26463,6 +26463,20 @@
           "status": "ADD",
           "ticket": "P1-E04-W4-S86-T1",
           "raw": "internal/mcp:initialize (ADD) — P1-E04-W4-S86-T1."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal/mcp:replay",
+      "sites": [
+        {
+          "file": "internal/mcp/replay_harness_test.go",
+          "line": 22,
+          "status": "ADD",
+          "raw": "internal/mcp:replay (ADD)."
         }
       ],
       "statuses": [
@@ -45133,7 +45147,7 @@
       ]
     }
   ],
-  "total_sites": 4348,
+  "total_sites": 4349,
   "unspecified_count": 427,
   "multi_status_count": 133
 }
