@@ -101,17 +101,20 @@ func (s *Server) dispatchInitialize(f *Frame) *Response {
 
 // negotiateVersion returns the revision this exchange will use.
 //
-// When the client offers the revision cascade speaks, that is the answer.
-// When it offers anything else — including nothing — the answer is
-// cascade's own, and the CLIENT decides whether to proceed. That is MCP's
-// rule and it is also the only behaviour that degrades sensibly: a server
-// that hung up on an unfamiliar version string would break on the next
-// revision every client ships before this one does.
+// When the client offers a revision in SupportedProtocolVersions, that
+// is the answer. When it offers anything else — including nothing — the
+// answer is the first supported version, and the CLIENT decides whether
+// to proceed. That is MCP's rule and it is also the only behaviour that
+// degrades sensibly: a server that hung up on an unfamiliar version
+// string would break on the next revision every client ships before
+// this one does.
 func negotiateVersion(offered string) string {
-	if offered == MCPProtocolVersion {
-		return offered
+	for _, v := range SupportedProtocolVersions {
+		if offered == v {
+			return v
+		}
 	}
-	return MCPProtocolVersion
+	return SupportedProtocolVersions[0]
 }
 
 // toolDescriptor is one entry of tools/list, in MCP's own shape.
