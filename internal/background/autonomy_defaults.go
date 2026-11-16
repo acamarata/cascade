@@ -59,13 +59,14 @@ func (r *Resolver) ResolveQuestion(question string, sensibleDefault string) (str
 	}
 
 	if r.mode == ModeFullAutonomy {
+		if prior, ok := r.defaults[question]; ok {
+			return prior, nil
+		}
 		if strings.TrimSpace(sensibleDefault) == "" {
 			return "", ErrInvalidQuestion
 		}
-		if _, ok := r.defaults[question]; !ok {
-			r.defaults[question] = sensibleDefault
-			r.defaultOrder = append(r.defaultOrder, question)
-		}
+		r.defaults[question] = sensibleDefault
+		r.defaultOrder = append(r.defaultOrder, question)
 		return sensibleDefault, nil
 	}
 
