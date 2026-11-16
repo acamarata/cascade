@@ -5235,5 +5235,13 @@
     "reason": "P2-BRG-03 ships NewMemoryRegistry with tests; P2-WIRB-17 is the wiring ticket that owns its production caller in cmd/cascade/wire_units_brg.go.",
     "retire_ticket": "P2-WIRB-17",
     "symbol": "internal/eligibility.NewMemoryRegistry"
+  },
+  {
+    "added_by_ticket": "P2-OWS-07",
+    "caller_site": "cmd/cascade/wire_units_ows.go",
+    "expected_caller": "cmd/cascade/wire_units_ows.go, written by P2-WIRB-60, which wires the uncalled P2-OWS units into the cascade command; retire this entry once that caller lands",
+    "reason": "P2-OWS-07 landed CreateGrant in internal/ownerauth/standing.go; P2-WIRB-60 is the ticket that wires it into cmd/cascade.",
+    "retire_ticket": "P2-WIRB-60",
+    "symbol": "internal/ownerauth.CreateGrant"
   }
 ]

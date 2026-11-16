@@ -49,65 +49,78 @@ func TestStandingGrantTypes(t *testing.T) {
 }
 
 func TestRevokeAndRenew(t *testing.T) {
-	t.Run("Revoke sets Revoked to true", func(t *testing.T) {
-		grant := &StandingGrant{
-			OwnerID:   "test-owner",
-			ExpiresAt: time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC),
-			Revoked:   false,
-		}
+	t.Run("Revoke sets Revoked to true", func(t *testing.T) { testRevokeAndRenewRevokeSetsRevokedToTrue(t) })
+	t.Run("Renew extends ExpiresAt on valid grant", func(t *testing.T) { testRevokeAndRenewRenewExtendsExpiresatOnValidGrant(t) })
+	t.Run("Renew returns ErrGrantRevoked on revoked grant", func(t *testing.T) { testRevokeAndRenewRenewReturnsErrgrantrevokedOnRevokedGrant(t) })
+	t.Run("revoke stops renewals at once", func(t *testing.T) { testRevokeAndRenewRevokeStopsRenewalsAtOnce(t) })
+}
 
-		grant.Revoke()
+// testRevokeAndRenewRevokeSetsRevokedToTrue checks: Revoke sets Revoked to true.
+func testRevokeAndRenewRevokeSetsRevokedToTrue(t *testing.T) {
+	t.Helper()
+	grant := &StandingGrant{
+		OwnerID:   "test-owner",
+		ExpiresAt: time.Date(2026, 12, 31, 0, 0, 0, 0, time.UTC),
+		Revoked:   false,
+	}
 
-		if !grant.Revoked {
-			t.Error("expected Revoked to be true after Revoke")
-		}
-	})
+	grant.Revoke()
 
-	t.Run("Renew extends ExpiresAt on valid grant", func(t *testing.T) {
-		grant := &StandingGrant{
-			OwnerID:   "test-owner",
-			ExpiresAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-			Revoked:   false,
-		}
-		duration := 24 * time.Hour
+	if !grant.Revoked {
+		t.Error("expected Revoked to be true after Revoke")
+	}
+}
 
-		err := grant.Renew(duration)
+// testRevokeAndRenewRenewExtendsExpiresatOnValidGrant checks: Renew extends ExpiresAt on valid grant.
+func testRevokeAndRenewRenewExtendsExpiresatOnValidGrant(t *testing.T) {
+	t.Helper()
+	grant := &StandingGrant{
+		OwnerID:   "test-owner",
+		ExpiresAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Revoked:   false,
+	}
+	duration := 24 * time.Hour
 
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		expected := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
-		if !grant.ExpiresAt.Equal(expected) {
-			t.Errorf("expected ExpiresAt %v, got %v", expected, grant.ExpiresAt)
-		}
-	})
+	err := grant.Renew(duration)
 
-	t.Run("Renew returns ErrGrantRevoked on revoked grant", func(t *testing.T) {
-		grant := &StandingGrant{
-			OwnerID:   "test-owner",
-			ExpiresAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-			Revoked:   true,
-		}
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	expected := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+	if !grant.ExpiresAt.Equal(expected) {
+		t.Errorf("expected ExpiresAt %v, got %v", expected, grant.ExpiresAt)
+	}
+}
 
-		err := grant.Renew(24 * time.Hour)
+// testRevokeAndRenewRenewReturnsErrgrantrevokedOnRevokedGrant checks: Renew returns ErrGrantRevoked on revoked grant.
+func testRevokeAndRenewRenewReturnsErrgrantrevokedOnRevokedGrant(t *testing.T) {
+	t.Helper()
+	grant := &StandingGrant{
+		OwnerID:   "test-owner",
+		ExpiresAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Revoked:   true,
+	}
 
-		if err != ErrGrantRevoked {
-			t.Errorf("expected ErrGrantRevoked, got %v", err)
-		}
-	})
+	err := grant.Renew(24 * time.Hour)
 
-	t.Run("revoke stops renewals at once", func(t *testing.T) {
-		grant := &StandingGrant{
-			OwnerID:   "test-owner",
-			ExpiresAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-			Revoked:   false,
-		}
+	if err != ErrGrantRevoked {
+		t.Errorf("expected ErrGrantRevoked, got %v", err)
+	}
+}
 
-		grant.Revoke()
-		err := grant.Renew(24 * time.Hour)
+// testRevokeAndRenewRevokeStopsRenewalsAtOnce checks: revoke stops renewals at once.
+func testRevokeAndRenewRevokeStopsRenewalsAtOnce(t *testing.T) {
+	t.Helper()
+	grant := &StandingGrant{
+		OwnerID:   "test-owner",
+		ExpiresAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Revoked:   false,
+	}
 
-		if err != ErrGrantRevoked {
-			t.Errorf("expected ErrGrantRevoked after revoke, got %v", err)
-		}
-	})
+	grant.Revoke()
+	err := grant.Renew(24 * time.Hour)
+
+	if err != ErrGrantRevoked {
+		t.Errorf("expected ErrGrantRevoked after revoke, got %v", err)
+	}
 }
