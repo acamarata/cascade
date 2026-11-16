@@ -1,0 +1,19 @@
+# fleet_domains.txtar
+#
+# `cascade fleet domains list|show <id>` call fleet.domains.* and render a
+# table or, under --json, the versioned envelope. A reachable daemon is not
+# available to this in-process driver, so the scripted half checks the
+# no-daemon refusal and the usage rule; the table, empty and envelope cases
+# run in cmd/cascade/fleet_domains_test.go against a stubbed daemon call.
+# testscript: executable
+
+! exec cascade fleet domains list
+stderr 'cascade daemon run'
+
+! exec cascade fleet domains show
+stderr 'accepts 1 arg'
+
+# CASCADE_NO_INPUT=1 changes nothing.
+env CASCADE_NO_INPUT=1
+! exec cascade fleet domains list
+stderr 'cascade daemon run'
