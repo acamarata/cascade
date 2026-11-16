@@ -98,11 +98,24 @@ Nothing below is ever taken from RPC params.
 
 ## Tool approvals
 
-`BridgeApprovals` files each approval request a delegated agent's driver raises
-as one entry in the policy approval queue, under capability
-`agents.tool_approval`, and answers the driver with a token only after the
-queue redeemed it once through `ConsumeToken`. A denial, cancel or timeout
-answers an empty token and cancels the entry.
+`BridgeApprovals` bridges the `ApprovalRequests()` channel of every spawned
+external driver to the one policy approval queue. There is no second queue and
+no auto-approve path. Each request becomes one entry:
+
+| Field | Value |
+|---|---|
+| Capability | `agents.tool_approval`, registered once |
+| Action | `agent.approval` |
+| Tier | the request's own data class, never the job's |
+| Reference | the delegation record id |
+
+The tier and the record id ride in the entry's params, which the queue hashes
+at admission and checks again at redemption.
+
+The driver's `ResolveApproval(id, token)` receives only a token the queue
+redeemed exactly once through `ConsumeToken`. A denial, cancel or timeout
+resolves with an empty token, which the driver answers as a decline, and
+cancels the queue entry.
 
 - A permissions grant with a path outside the envelope roots, a host outside
   its egress, or no grant at all is refused with an empty token and journaled.
@@ -113,6 +126,9 @@ answers an empty token and cancels the entry.
 - The queue passed to `BridgeApprovals` must also implement
   `EffectState(ctx, key)` over the audit effect log that `approval.grant`
   writes. A queue without it forwards nothing.
+
+The real counterpart is checked in the P1-AGT-09 live leg: one `codex` command
+approval reaches the queue and is decided through `cascade approvals`.
 
 ## Recovery
 
