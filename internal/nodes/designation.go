@@ -183,6 +183,10 @@ func initialDesignation(d DesignationBackend, self Identity, rnd io.Reader, cloc
 }
 
 // Handover accepts only the next epoch for an existing installation.
+// It is the only designation write besides init and bootstrap. The operator
+// command that calls it (an elevated controller handover) is deliberately not
+// in this release: handover is an explicit operator action that arrives with
+// the elevated command set, so until then only tests call Handover.
 func Handover(d DesignationBackend, next Designation) error {
 	if d == nil {
 		return cascade.New(cascade.KindIntegrity, "nodes: no designation backend")
