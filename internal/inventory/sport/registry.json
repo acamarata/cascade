@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-16T00:14:09Z",
+  "generated_at": "2026-11-16T03:47:12Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -26792,7 +26792,7 @@
       "sites": [
         {
           "file": "internal/nodes/serve_registry.go",
-          "line": 14,
+          "line": 15,
           "status": "",
           "ticket": "P1-E17-W4-S36-T2",
           "raw": "internal/nodes BuildServeRegistry (P1-E17-W4-S36-T2; elevation P1-SEC-03)."
