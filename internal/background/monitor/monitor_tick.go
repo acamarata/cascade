@@ -52,11 +52,17 @@ func NewEmitter(c Clock, interval time.Duration, emit func(Tick)) (*Emitter, err
 	}, nil
 }
 
-// Start begins emitting ticks. Returns ErrInvalidMonitorInput if already started
-// or previously stopped.
+// Start begins emitting ticks. Repeated calls while running are a no-op.
+// Returns ErrInvalidMonitorInput if the emitter is zero-value or previously stopped.
 func (e *Emitter) Start() error {
-	if e.stopFn != nil || e.stopped {
+	if e == nil || e.clock == nil {
 		return ErrInvalidMonitorInput
+	}
+	if e.stopped {
+		return ErrInvalidMonitorInput
+	}
+	if e.stopFn != nil {
+		return nil
 	}
 	e.schedule()
 	return nil
@@ -66,17 +72,23 @@ func (e *Emitter) schedule() {
 	e.stopFn = e.clock.AfterFunc(e.interval, func() {
 		e.seq++
 		e.emit(Tick{Seq: e.seq, At: e.clock.Now()})
-		e.schedule()
+		if !e.stopped {
+			e.schedule()
+		}
 	})
 }
 
-// Stop halts the emitter. It is idempotent.
+// Stop halts the emitter. It is idempotent and permanently prevents future starts.
+// A zero-value or nil receiver Stop is a no-op.
 func (e *Emitter) Stop() {
+	if e == nil {
+		return
+	}
+	e.stopped = true
 	if e.stopFn != nil {
 		e.stopFn()
 		e.stopFn = nil
 	}
-	e.stopped = true
 }
 
 // GapIncident reports whether the gap between now and last exceeds three intervals.
