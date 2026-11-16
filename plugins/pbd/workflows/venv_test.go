@@ -44,8 +44,8 @@ func TestFindPythonValid(t *testing.T) {
 	}
 }
 
-func TestFindPythonNoneAvailable(t *testing.T) {
-	// nil/empty
+// testFindPythonNilEmpty verifies behavior when candidates are nil or empty.
+func testFindPythonNilEmpty(t *testing.T) {
 	_, err := FindPython(nil, func(string) error { return nil })
 	if !errors.Is(err, ErrPythonUnavailable) {
 		t.Errorf("nil cands: expected ErrPythonUnavailable, got %v", err)
@@ -54,20 +54,24 @@ func TestFindPythonNoneAvailable(t *testing.T) {
 	if !errors.Is(err, ErrPythonUnavailable) {
 		t.Errorf("empty cands: expected ErrPythonUnavailable, got %v", err)
 	}
+}
 
-	// nil probe
-	_, err = FindPython([]string{"/opt/homebrew/bin/python3"}, nil)
+// testFindPythonNilProbe verifies behavior when the probe is nil.
+func testFindPythonNilProbe(t *testing.T) {
+	_, err := FindPython([]string{"/opt/homebrew/bin/python3"}, nil)
 	if !errors.Is(err, ErrPythonUnavailable) {
 		t.Errorf("nil probe: expected ErrPythonUnavailable, got %v", err)
 	}
+}
 
-	// unsupported candidates
+// testFindPythonUnsupported verifies behavior when candidates are unsupported.
+func testFindPythonUnsupported(t *testing.T) {
 	probes := 0
 	probe := func(string) error {
 		probes++
 		return nil
 	}
-	_, err = FindPython([]string{"/usr/local/bin/python3"}, probe)
+	_, err := FindPython([]string{"/usr/local/bin/python3"}, probe)
 	if !errors.Is(err, ErrPythonUnavailable) {
 		t.Errorf("unsupported: expected ErrPythonUnavailable, got %v", err)
 	}
@@ -77,28 +81,45 @@ func TestFindPythonNoneAvailable(t *testing.T) {
 	if err.Error() != "D5009" {
 		t.Errorf("expected error text D5009, got %s", err.Error())
 	}
+}
 
-	// duplicate candidates
-	probes = 0
-	_, err = FindPython([]string{"/opt/homebrew/bin/python3", "/opt/homebrew/bin/python3"}, probe)
+// testFindPythonDuplicate verifies behavior when candidates contain duplicates.
+func testFindPythonDuplicate(t *testing.T) {
+	probes := 0
+	probe := func(string) error {
+		probes++
+		return nil
+	}
+	_, err := FindPython([]string{"/opt/homebrew/bin/python3", "/opt/homebrew/bin/python3"}, probe)
 	if !errors.Is(err, ErrPythonUnavailable) {
 		t.Errorf("duplicate: expected ErrPythonUnavailable, got %v", err)
 	}
 	if probes != 0 {
 		t.Errorf("duplicate should cause zero probes, got %d", probes)
 	}
+}
 
-	// exhausted probes
-	probes = 0
-	probe = func(string) error {
+// testFindPythonExhausted verifies behavior when all probes fail.
+func testFindPythonExhausted(t *testing.T) {
+	probes := 0
+	probe := func(string) error {
 		probes++
 		return errors.New("fail")
 	}
-	_, err = FindPython([]string{"/opt/homebrew/bin/python3", "/usr/bin/python3"}, probe)
+	_, err := FindPython([]string{"/opt/homebrew/bin/python3", "/usr/bin/python3"}, probe)
 	if !errors.Is(err, ErrPythonUnavailable) {
 		t.Errorf("exhausted: expected ErrPythonUnavailable, got %v", err)
 	}
 	if probes != 2 {
 		t.Errorf("expected 2 probes, got %d", probes)
 	}
+}
+
+// TestFindPythonNoneAvailable runs the subtests for FindPython when no Python is available.
+func TestFindPythonNoneAvailable(t *testing.T) {
+	testFindPythonNilEmpty(t)
+	testFindPythonNilProbe(t)
+	testFindPythonUnsupported(t)
+	testFindPythonDuplicate(t)
+	testFindPythonExhausted(t)
 }

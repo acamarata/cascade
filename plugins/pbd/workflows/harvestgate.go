@@ -1,3 +1,4 @@
+// Package workflows provides harvest gating and Python virtual-environment utilities.
 package workflows
 
 import (

@@ -18,7 +18,8 @@ type mockCall struct {
 	group []BatchFailureEvent
 }
 
-func (m *mockModel) Call(ctx context.Context, r Rule, group []BatchFailureEvent) error {
+// Call records a model invocation for later assertions.
+func (m *mockModel) Call(_ context.Context, r Rule, group []BatchFailureEvent) error {
 	g := make([]BatchFailureEvent, len(group))
 	copy(g, group)
 	m.calls = append(m.calls, mockCall{rule: r, group: g})
@@ -36,95 +37,112 @@ func TestHandleBatchOneCallPerRule(t *testing.T) {
 		{Name: "e3", Kind: "k1", At: now},
 	}
 
-	t.Run("single matching rule", func(t *testing.T) {
-		m := &mockModel{}
-		rules := []Rule{{ID: "r1", Kind: "k1"}}
-		ticket, err := HandleBatch(context.Background(), m, rules, events)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(m.calls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(m.calls))
-		}
-		if m.calls[0].rule.ID != "r1" {
-			t.Errorf("expected rule r1, got %s", m.calls[0].rule.ID)
-		}
-		if len(m.calls[0].group) != 3 {
-			t.Fatalf("expected 3 events in call, got %d", len(m.calls[0].group))
-		}
-		if m.calls[0].group[0].Name != "e3" {
-			t.Errorf("expected first event e3, got %s", m.calls[0].group[0].Name)
-		}
-		if m.calls[0].group[1].Name != "e2" {
-			t.Errorf("expected second event e2, got %s", m.calls[0].group[1].Name)
-		}
-		if m.calls[0].group[2].Name != "e1" {
-			t.Errorf("expected third event e1, got %s", m.calls[0].group[2].Name)
-		}
-		if ticket.Name != "e3" {
-			t.Errorf("expected ticket name e3, got %s", ticket.Name)
-		}
-	})
+	t.Run("single matching rule", func(t *testing.T) { testHandleBatchOneCallPerRuleSingleMatchingRule(t, events) })
+	t.Run("multiple matching rules", func(t *testing.T) { testHandleBatchOneCallPerRuleMultipleMatchingRules(t, events) })
+	t.Run("model error", func(t *testing.T) { testHandleBatchOneCallPerRuleModelError(t, events) })
+	t.Run("invalid batch", func(t *testing.T) { testHandleBatchOneCallPerRuleInvalidBatch(t, events) })
+	t.Run("input slices unchanged", func(t *testing.T) { testHandleBatchOneCallPerRuleInputSlicesUnchanged(t, events) })
+}
 
-	t.Run("multiple matching rules", func(t *testing.T) {
-		m := &mockModel{}
-		rules := []Rule{
-			{ID: "r1", Kind: "k1"},
-			{ID: "r2", Kind: "k2"},
-			{ID: "r3", Kind: "k3"},
-		}
-		_, err := HandleBatch(context.Background(), m, rules, events)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(m.calls) != 2 {
-			t.Fatalf("expected 2 calls, got %d", len(m.calls))
-		}
-		if m.calls[0].rule.ID != "r1" {
-			t.Errorf("expected first call rule r1, got %s", m.calls[0].rule.ID)
-		}
-		if m.calls[1].rule.ID != "r2" {
-			t.Errorf("expected second call rule r2, got %s", m.calls[1].rule.ID)
-		}
-	})
+// testHandleBatchOneCallPerRuleSingleMatchingRule checks: single matching rule.
+func testHandleBatchOneCallPerRuleSingleMatchingRule(t *testing.T, events []BatchFailureEvent) {
+	t.Helper()
+	m := &mockModel{}
+	rules := []Rule{{ID: "r1", Kind: "k1"}}
+	ticket, err := HandleBatch(context.Background(), m, rules, events)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(m.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(m.calls))
+	}
+	if m.calls[0].rule.ID != "r1" {
+		t.Errorf("expected rule r1, got %s", m.calls[0].rule.ID)
+	}
+	if len(m.calls[0].group) != 3 {
+		t.Fatalf("expected 3 events in call, got %d", len(m.calls[0].group))
+	}
+	if m.calls[0].group[0].Name != "e3" {
+		t.Errorf("expected first event e3, got %s", m.calls[0].group[0].Name)
+	}
+	if m.calls[0].group[1].Name != "e2" {
+		t.Errorf("expected second event e2, got %s", m.calls[0].group[1].Name)
+	}
+	if m.calls[0].group[2].Name != "e1" {
+		t.Errorf("expected third event e1, got %s", m.calls[0].group[2].Name)
+	}
+	if ticket.Name != "e3" {
+		t.Errorf("expected ticket name e3, got %s", ticket.Name)
+	}
+}
 
-	t.Run("model error", func(t *testing.T) {
-		m := &mockModel{err: errors.New("fail")}
-		rules := []Rule{{ID: "r1", Kind: "k1"}}
-		_, err := HandleBatch(context.Background(), m, rules, events)
-		if !errors.Is(err, ErrBatchModel) {
-			t.Errorf("expected ErrBatchModel, got %v", err)
-		}
-	})
+// testHandleBatchOneCallPerRuleMultipleMatchingRules checks: multiple matching rules.
+func testHandleBatchOneCallPerRuleMultipleMatchingRules(t *testing.T, events []BatchFailureEvent) {
+	t.Helper()
+	m := &mockModel{}
+	rules := []Rule{
+		{ID: "r1", Kind: "k1"},
+		{ID: "r2", Kind: "k2"},
+		{ID: "r3", Kind: "k3"},
+	}
+	_, err := HandleBatch(context.Background(), m, rules, events)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(m.calls) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(m.calls))
+	}
+	if m.calls[0].rule.ID != "r1" {
+		t.Errorf("expected first call rule r1, got %s", m.calls[0].rule.ID)
+	}
+	if m.calls[1].rule.ID != "r2" {
+		t.Errorf("expected second call rule r2, got %s", m.calls[1].rule.ID)
+	}
+}
 
-	t.Run("invalid batch", func(t *testing.T) {
-		m := &mockModel{}
-		badEvents := []BatchFailureEvent{
-			{Name: "e1", Kind: "k1", At: now},
-			{Name: "e1", Kind: "k2", At: now},
-		}
-		rules := []Rule{{ID: "r1", Kind: "k1"}}
-		_, err := HandleBatch(context.Background(), m, rules, badEvents)
-		if !errors.Is(err, ErrInvalidBatch) {
-			t.Errorf("expected ErrInvalidBatch, got %v", err)
-		}
-		if len(m.calls) != 0 {
-			t.Errorf("expected no calls for invalid batch, got %d", len(m.calls))
-		}
-	})
+// testHandleBatchOneCallPerRuleModelError checks: model error.
+func testHandleBatchOneCallPerRuleModelError(t *testing.T, events []BatchFailureEvent) {
+	t.Helper()
+	m := &mockModel{err: errors.New("fail")}
+	rules := []Rule{{ID: "r1", Kind: "k1"}}
+	_, err := HandleBatch(context.Background(), m, rules, events)
+	if !errors.Is(err, ErrBatchModel) {
+		t.Errorf("expected ErrBatchModel, got %v", err)
+	}
+}
 
-	t.Run("input slices unchanged", func(t *testing.T) {
-		m := &mockModel{}
-		rules := []Rule{{ID: "r1", Kind: "k1"}}
-		origEvents := make([]BatchFailureEvent, len(events))
-		copy(origEvents, events)
-		_, _ = HandleBatch(context.Background(), m, rules, events)
-		for i := range events {
-			if events[i] != origEvents[i] {
-				t.Errorf("input events mutated at index %d", i)
-			}
+// testHandleBatchOneCallPerRuleInvalidBatch checks: invalid batch.
+func testHandleBatchOneCallPerRuleInvalidBatch(t *testing.T, events []BatchFailureEvent) {
+	t.Helper()
+	now := events[len(events)-1].At // the newest shared event is the test clock
+	m := &mockModel{}
+	badEvents := []BatchFailureEvent{
+		{Name: "e1", Kind: "k1", At: now},
+		{Name: "e1", Kind: "k2", At: now},
+	}
+	rules := []Rule{{ID: "r1", Kind: "k1"}}
+	_, err := HandleBatch(context.Background(), m, rules, badEvents)
+	if !errors.Is(err, ErrInvalidBatch) {
+		t.Errorf("expected ErrInvalidBatch, got %v", err)
+	}
+	if len(m.calls) != 0 {
+		t.Errorf("expected no calls for invalid batch, got %d", len(m.calls))
+	}
+}
+
+// testHandleBatchOneCallPerRuleInputSlicesUnchanged checks: input slices unchanged.
+func testHandleBatchOneCallPerRuleInputSlicesUnchanged(t *testing.T, events []BatchFailureEvent) {
+	t.Helper()
+	m := &mockModel{}
+	rules := []Rule{{ID: "r1", Kind: "k1"}}
+	origEvents := make([]BatchFailureEvent, len(events))
+	copy(origEvents, events)
+	_, _ = HandleBatch(context.Background(), m, rules, events)
+	for i := range events {
+		if events[i] != origEvents[i] {
+			t.Errorf("input events mutated at index %d", i)
 		}
-	})
+	}
 }
 
 // TestHandleBatchNewestEventLeads verifies that the newest event provides
@@ -133,61 +151,71 @@ func TestHandleBatchOneCallPerRule(t *testing.T) {
 func TestHandleBatchNewestEventLeads(t *testing.T) {
 	now := time.Now()
 
-	t.Run("newest event unmatched kind", func(t *testing.T) {
-		events := []BatchFailureEvent{
-			{Name: "ev-old", Kind: "match", At: now.Add(-time.Hour)},
-			{Name: "ev-new", Kind: "unmatched", At: now},
-		}
-		m := &mockModel{}
-		rules := []Rule{{ID: "r1", Kind: "match"}}
-		ticket, err := HandleBatch(context.Background(), m, rules, events)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if ticket.Name != "ev-new" {
-			t.Errorf("expected ticket name ev-new, got %s", ticket.Name)
-		}
-		if len(m.calls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(m.calls))
-		}
-		if m.calls[0].group[0].Name != "ev-new" {
-			t.Errorf("expected sorted group to lead with ev-new, got %s", m.calls[0].group[0].Name)
-		}
-	})
+	t.Run("newest event unmatched kind", func(t *testing.T) { testHandleBatchNewestEventLeadsNewestEventUnmatchedKind(t, now) })
+	t.Run("equal timestamps retain original order", func(t *testing.T) { testHandleBatchNewestEventLeadsEqualTimestampsRetainOriginalOrder(t, now) })
+	t.Run("zero timestamps are valid", func(t *testing.T) { testHandleBatchNewestEventLeadsZeroTimestampsAreValid(t, now) })
+}
 
-	t.Run("equal timestamps retain original order", func(t *testing.T) {
-		events := []BatchFailureEvent{
-			{Name: "a", Kind: "k", At: now},
-			{Name: "b", Kind: "k", At: now},
-			{Name: "c", Kind: "k", At: now},
-		}
-		m := &mockModel{}
-		rules := []Rule{{ID: "r1", Kind: "k"}}
-		_, err := HandleBatch(context.Background(), m, rules, events)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(m.calls) != 1 {
-			t.Fatalf("expected 1 call, got %d", len(m.calls))
-		}
-		if m.calls[0].group[0].Name != "a" || m.calls[0].group[1].Name != "b" || m.calls[0].group[2].Name != "c" {
-			t.Errorf("stable sort failed: got %v", m.calls[0].group)
-		}
-	})
+// testHandleBatchNewestEventLeadsNewestEventUnmatchedKind checks: newest event unmatched kind.
+func testHandleBatchNewestEventLeadsNewestEventUnmatchedKind(t *testing.T, now time.Time) {
+	t.Helper()
+	events := []BatchFailureEvent{
+		{Name: "ev-old", Kind: "match", At: now.Add(-time.Hour)},
+		{Name: "ev-new", Kind: "unmatched", At: now},
+	}
+	m := &mockModel{}
+	rules := []Rule{{ID: "r1", Kind: "match"}}
+	ticket, err := HandleBatch(context.Background(), m, rules, events)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ticket.Name != "ev-new" {
+		t.Errorf("expected ticket name ev-new, got %s", ticket.Name)
+	}
+	if len(m.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(m.calls))
+	}
+	if m.calls[0].group[0].Name != "ev-new" {
+		t.Errorf("expected sorted group to lead with ev-new, got %s", m.calls[0].group[0].Name)
+	}
+}
 
-	t.Run("zero timestamps are valid", func(t *testing.T) {
-		events := []BatchFailureEvent{
-			{Name: "z1", Kind: "k"},
-			{Name: "z2", Kind: "k"},
-		}
-		m := &mockModel{}
-		rules := []Rule{{ID: "r1", Kind: "k"}}
-		ticket, err := HandleBatch(context.Background(), m, rules, events)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if ticket.Name != "z1" {
-			t.Errorf("expected ticket name z1 for zero times, got %s", ticket.Name)
-		}
-	})
+// testHandleBatchNewestEventLeadsEqualTimestampsRetainOriginalOrder checks: equal timestamps retain original order.
+func testHandleBatchNewestEventLeadsEqualTimestampsRetainOriginalOrder(t *testing.T, now time.Time) {
+	t.Helper()
+	events := []BatchFailureEvent{
+		{Name: "a", Kind: "k", At: now},
+		{Name: "b", Kind: "k", At: now},
+		{Name: "c", Kind: "k", At: now},
+	}
+	m := &mockModel{}
+	rules := []Rule{{ID: "r1", Kind: "k"}}
+	_, err := HandleBatch(context.Background(), m, rules, events)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(m.calls) != 1 {
+		t.Fatalf("expected 1 call, got %d", len(m.calls))
+	}
+	if m.calls[0].group[0].Name != "a" || m.calls[0].group[1].Name != "b" || m.calls[0].group[2].Name != "c" {
+		t.Errorf("stable sort failed: got %v", m.calls[0].group)
+	}
+}
+
+// testHandleBatchNewestEventLeadsZeroTimestampsAreValid checks: zero timestamps are valid.
+func testHandleBatchNewestEventLeadsZeroTimestampsAreValid(t *testing.T, _ time.Time) {
+	t.Helper()
+	events := []BatchFailureEvent{
+		{Name: "z1", Kind: "k"},
+		{Name: "z2", Kind: "k"},
+	}
+	m := &mockModel{}
+	rules := []Rule{{ID: "r1", Kind: "k"}}
+	ticket, err := HandleBatch(context.Background(), m, rules, events)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ticket.Name != "z1" {
+		t.Errorf("expected ticket name z1 for zero times, got %s", ticket.Name)
+	}
 }

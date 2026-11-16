@@ -1,3 +1,4 @@
+// Package browser provides user interface components for the surface layer.
 package browser
 
 // ChainEntry represents a single entry in an instruction chain.
@@ -21,16 +22,13 @@ type Opener interface {
 // in input order, including duplicates and empty paths. A nil or empty
 // chain returns nil. The opener parameter is retained for API compatibility
 // but unused by NotesView.
-func NotesView(chain []ChainEntry, opener Opener) []Row {
+func NotesView(chain []ChainEntry, _ Opener) []Row {
 	if len(chain) == 0 {
 		return nil
 	}
 	rows := make([]Row, len(chain))
 	for i, entry := range chain {
-		rows[i] = Row{
-			Name: entry.Name,
-			Path: entry.Path,
-		}
+		rows[i] = Row(entry)
 	}
 	return rows
 }

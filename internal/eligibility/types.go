@@ -4,10 +4,10 @@ package eligibility
 
 import "time"
 
-// EligibilityRow represents the eligibility state for a single operation.
+// Row represents the eligibility state for a single operation.
 // A row defaults to deny for consumer automation; permitted_browser and
 // consumer_chat_automation default blocked unless provider_authorised is true.
-type EligibilityRow struct {
+type Row struct {
 	// OperationID uniquely identifies the operation.
 	OperationID string
 	// TermsSource records where the terms were sourced from.
@@ -24,15 +24,21 @@ type EligibilityRow struct {
 	ProviderAuthorised bool
 }
 
+// Clock abstracts time retrieval for testability.
+type Clock interface {
+	// Now returns the current time.
+	Now() time.Time
+}
+
 // Registry defines the interface for managing eligibility rows.
 type Registry interface {
-	// Get returns the EligibilityRow for the given operationID.
+	// Get returns the Row for the given operationID.
 	// It returns a default-deny row for unregistered operations.
-	Get(operationID string) (EligibilityRow, error)
+	Get(operationID string) (Row, error)
 	// Set stores the given row. It rejects loosening changes without elevation;
 	// only tightening is permitted at runtime.
-	Set(row EligibilityRow) error
-	// IsExpired returns true when now is after the row's Expiry time,
+	Set(row Row) error
+	// IsExpired returns true when the clock's time is after the row's Expiry time,
 	// causing the row to read needs_review and the operation to be refused.
-	IsExpired(row EligibilityRow, now time.Time) bool
+	IsExpired(row Row, c Clock) bool
 }

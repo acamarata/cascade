@@ -8,24 +8,39 @@ import (
 // duplicates, and empty paths, and that a nil or empty chain yields nil
 // without calling the opener.
 func TestNotesViewChainOrder(t *testing.T) {
-	chain := []ChainEntry{
-		{Name: "GCI", Path: "/gci"},
-		{Name: "APC", Path: "/apc"},
-		{Name: "PPC", Path: "/ppc"},
-	}
-
 	called := false
 	opener := &testOpener{fn: func(_ string) error {
 		called = true
 		return nil
 	}}
 
-	rows := NotesView(chain, opener)
+	testStandardOrder(t, opener)
+	testDuplicateEntries(t, opener)
+	testEmptyPaths(t, opener)
+	testNilChain(t, opener)
+	testEmptyChain(t, opener)
 
+	if called {
+		t.Error("opener should not be called by NotesView")
+	}
+
+	// Nil opener is accepted without panic.
+	chain := []ChainEntry{{Name: "GCI", Path: "/gci"}}
+	_ = NotesView(chain, nil)
+}
+
+// testStandardOrder checks that a standard chain preserves order and values.
+func testStandardOrder(t *testing.T, opener Opener) {
+	t.Helper()
+	chain := []ChainEntry{
+		{Name: "GCI", Path: "/gci"},
+		{Name: "APC", Path: "/apc"},
+		{Name: "PPC", Path: "/ppc"},
+	}
+	rows := NotesView(chain, opener)
 	if len(rows) != 3 {
 		t.Fatalf("expected 3 rows, got %d", len(rows))
 	}
-
 	expected := []Row{
 		{Name: "GCI", Path: "/gci"},
 		{Name: "APC", Path: "/apc"},
@@ -36,12 +51,11 @@ func TestNotesViewChainOrder(t *testing.T) {
 			t.Errorf("row %d: got %+v, want %+v", i, rows[i], want)
 		}
 	}
+}
 
-	if called {
-		t.Error("opener should not be called by NotesView")
-	}
-
-	// Duplicate entries are preserved.
+// testDuplicateEntries checks that duplicate entries are preserved and identical.
+func testDuplicateEntries(t *testing.T, opener Opener) {
+	t.Helper()
 	dupChain := []ChainEntry{
 		{Name: "GCI", Path: "/gci"},
 		{Name: "GCI", Path: "/gci"},
@@ -53,26 +67,32 @@ func TestNotesViewChainOrder(t *testing.T) {
 	if dupRows[0] != dupRows[1] {
 		t.Errorf("duplicate rows differ: %+v vs %+v", dupRows[0], dupRows[1])
 	}
+}
 
-	// Empty paths are preserved.
+// testEmptyPaths checks that empty paths are preserved.
+func testEmptyPaths(t *testing.T, opener Opener) {
+	t.Helper()
 	emptyPathChain := []ChainEntry{{Name: "X", Path: ""}}
 	epRows := NotesView(emptyPathChain, opener)
 	if len(epRows) != 1 || epRows[0].Path != "" {
 		t.Errorf("expected one row with empty path, got %+v", epRows)
 	}
+}
 
-	// Nil chain returns nil.
+// testNilChain checks that a nil chain returns nil.
+func testNilChain(t *testing.T, opener Opener) {
+	t.Helper()
 	if got := NotesView(nil, opener); got != nil {
 		t.Errorf("expected nil for nil chain, got %v", got)
 	}
+}
 
-	// Empty chain returns nil.
+// testEmptyChain checks that an empty chain returns nil.
+func testEmptyChain(t *testing.T, opener Opener) {
+	t.Helper()
 	if got := NotesView([]ChainEntry{}, opener); got != nil {
 		t.Errorf("expected nil for empty chain, got %v", got)
 	}
-
-	// Nil opener is accepted without panic.
-	_ = NotesView(chain, nil)
 }
 
 // testOpener implements Opener for testing purposes.

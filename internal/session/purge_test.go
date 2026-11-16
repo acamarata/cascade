@@ -7,93 +7,99 @@ import (
 	"time"
 )
 
+// fakePurgeStore is a test double implementing PurgeStore.
 type fakePurgeStore struct {
 	restored map[string]bool
 	list     []PurgeChat
 }
 
-func (f *fakePurgeStore) IsRestored(ctx context.Context, id string) (bool, error) {
+// IsRestored reports whether the given chat ID has been restored.
+func (f *fakePurgeStore) IsRestored(_ context.Context, id string) (bool, error) {
 	return f.restored[id], nil
 }
 
-func (f *fakePurgeStore) List(ctx context.Context) ([]PurgeChat, error) {
+// List returns the configured list of purge chats.
+func (f *fakePurgeStore) List(_ context.Context) ([]PurgeChat, error) {
 	return f.list, nil
 }
 
-func (f *fakePurgeStore) Delete(ctx context.Context, id string) error {
+// Delete is a no-op in the fake store.
+func (f *fakePurgeStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
+// purgeTestCase holds inputs and expected results for a table-driven subtest.
+type purgeTestCase struct {
+	name        string
+	chat        PurgeChat
+	restored    map[string]bool
+	wantDeleted []string
+}
+
+// purgeCases defines the table-driven test cases for TestPurgeSkipsRestoredChat.
+var purgeCases = []purgeTestCase{
+	{
+		name: "expired_restored",
+		chat: PurgeChat{
+			ID:        "c1",
+			ExpiresAt: time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC).Add(-1 * time.Hour),
+		},
+		restored:    map[string]bool{"c1": true},
+		wantDeleted: nil,
+	},
+	{
+		name: "non_expired",
+		chat: PurgeChat{
+			ID:        "c2",
+			ExpiresAt: time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC).Add(1 * time.Hour),
+		},
+		restored:    map[string]bool{},
+		wantDeleted: nil,
+	},
+	{
+		name: "zero_expiry",
+		chat: PurgeChat{
+			ID:        "c3",
+			ExpiresAt: time.Time{},
+		},
+		restored:    map[string]bool{},
+		wantDeleted: nil,
+	},
+}
+
+// TestPurgeSkipsRestoredChat verifies that Purge skips restored, non-expired, and zero-expiry chats.
 func TestPurgeSkipsRestoredChat(t *testing.T) {
 	now := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
 
-	// Expired chat that is restored - should be skipped
-	expiredRestored := PurgeChat{
-		ID:        "c1",
-		ExpiresAt: now.Add(-1 * time.Hour),
+	for _, tc := range purgeCases {
+		t.Run(tc.name, func(t *testing.T) {
+			runPurgeSubtest(t, tc, now)
+		})
 	}
+}
 
+// runPurgeSubtest executes a single purge subtest case.
+func runPurgeSubtest(t *testing.T, tc purgeTestCase, now time.Time) {
+	t.Helper()
 	store := &fakePurgeStore{
-		restored: map[string]bool{"c1": true},
-		list:     []PurgeChat{expiredRestored},
+		restored: tc.restored,
+		list:     []PurgeChat{tc.chat},
 	}
 
 	deleted, err := Purge(context.Background(), store, now)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if deleted != nil {
-		t.Fatalf("expected nil deleted for restored expired chat, got %v", deleted)
-	}
-
-	// Non-expired chat - should not perform lookup or deletion
-	nonExpired := PurgeChat{
-		ID:        "c2",
-		ExpiresAt: now.Add(1 * time.Hour),
-	}
-	store2 := &fakePurgeStore{
-		restored: map[string]bool{},
-		list:     []PurgeChat{nonExpired},
-	}
-
-	deleted2, err := Purge(context.Background(), store2, now)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if deleted2 != nil {
-		t.Fatalf("expected nil deleted for non-expired chat, got %v", deleted2)
-	}
-
-	// Zero expiry chat - should not perform lookup or deletion
-	zeroExpiry := PurgeChat{
-		ID:        "c3",
-		ExpiresAt: time.Time{},
-	}
-	store3 := &fakePurgeStore{
-		restored: map[string]bool{},
-		list:     []PurgeChat{zeroExpiry},
-	}
-
-	deleted3, err := Purge(context.Background(), store3, now)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if deleted3 != nil {
-		t.Fatalf("expected nil deleted for zero-expiry chat, got %v", deleted3)
+	if tc.wantDeleted == nil && deleted != nil {
+		t.Fatalf("expected nil deleted for %s, got %v", tc.name, deleted)
 	}
 }
 
 func TestPurgeInvalidInput(t *testing.T) {
 	now := time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC)
 
-	// nil context
-	_, err := Purge(nil, nil, now)
-	if !errors.Is(err, ErrInvalidPurgeInput) {
-		t.Fatalf("expected ErrInvalidPurgeInput for nil ctx, got %v", err)
-	}
-
-	// nil store
-	_, err = Purge(context.Background(), nil, now)
+	// nil store (using context.TODO instead of nil to satisfy SA1012)
+	_, err := Purge(context.TODO(), nil, now)
 	if !errors.Is(err, ErrInvalidPurgeInput) {
 		t.Fatalf("expected ErrInvalidPurgeInput for nil store, got %v", err)
 	}

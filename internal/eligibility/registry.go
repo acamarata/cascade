@@ -4,7 +4,6 @@ package eligibility
 import (
 	"errors"
 	"sync"
-	"time"
 )
 
 // ErrLooseningWithoutElevation is returned when Set attempts to loosen
@@ -15,19 +14,19 @@ var ErrLooseningWithoutElevation = errors.New("eligibility: cannot loosen permis
 // tighten-only semantics at runtime.
 type memoryRegistry struct {
 	mu   sync.RWMutex
-	rows map[string]EligibilityRow
+	rows map[string]Row
 }
 
 // NewMemoryRegistry returns a Registry backed by an in-memory store.
 func NewMemoryRegistry() Registry {
 	return &memoryRegistry{
-		rows: make(map[string]EligibilityRow),
+		rows: make(map[string]Row),
 	}
 }
 
-// Get returns the EligibilityRow for the given operationID.
+// Get returns the Row for the given operationID.
 // Unregistered operations receive a default-deny row with no error.
-func (r *memoryRegistry) Get(operationID string) (EligibilityRow, error) {
+func (r *memoryRegistry) Get(operationID string) (Row, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
@@ -36,7 +35,7 @@ func (r *memoryRegistry) Get(operationID string) (EligibilityRow, error) {
 	}
 
 	// Default deny: all permission flags false.
-	return EligibilityRow{
+	return Row{
 		OperationID:            operationID,
 		PermittedBrowser:       false,
 		ConsumerChatAutomation: false,
@@ -47,7 +46,7 @@ func (r *memoryRegistry) Get(operationID string) (EligibilityRow, error) {
 // Set stores the given row. It rejects any change that loosens permissions
 // relative to the existing row unless elevation is provided (not yet modelled).
 // Tightening (setting a true flag to false) is always allowed.
-func (r *memoryRegistry) Set(row EligibilityRow) error {
+func (r *memoryRegistry) Set(row Row) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -60,18 +59,18 @@ func (r *memoryRegistry) Set(row EligibilityRow) error {
 	return nil
 }
 
-// IsExpired returns true when now is strictly after the row's Expiry time.
+// IsExpired returns true when the clock's time is strictly after the row's Expiry time.
 // An expired row should be treated as needs_review and the operation refused.
-func (r *memoryRegistry) IsExpired(row EligibilityRow, now time.Time) bool {
+func (r *memoryRegistry) IsExpired(row Row, c Clock) bool {
 	if row.Expiry.IsZero() {
 		return false
 	}
-	return now.After(row.Expiry)
+	return c.Now().After(row.Expiry)
 }
 
 // isLoosening reports whether next loosens any permission relative to prev.
 // A permission is loosened when it changes from false to true.
-func isLoosening(prev, next EligibilityRow) bool {
+func isLoosening(prev, next Row) bool {
 	if !prev.PermittedBrowser && next.PermittedBrowser {
 		return true
 	}

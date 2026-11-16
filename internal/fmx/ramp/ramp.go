@@ -65,7 +65,7 @@ func validate(m interface{}, dataDir string, u interface{}, now time.Time) error
 
 	// Check for typed nil using reflection
 	v := reflect.ValueOf(u)
-	if v.Kind() == reflect.Ptr && v.IsNil() {
+	if v.Kind() == reflect.Pointer && v.IsNil() {
 		return ErrInvalidRampMetrics
 	}
 

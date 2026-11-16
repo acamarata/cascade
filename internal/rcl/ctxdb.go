@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	// Import sqlite driver for database/sql.
 	_ "modernc.org/sqlite"
 )
 
@@ -58,7 +59,7 @@ func OpenCtxDB(path string) (*CtxDB, error) {
 	ctxDB := &CtxDB{DB: db}
 
 	if err := ctxDB.createSchema(); err != nil {
-		db.Close()
+		_ = db.Close()
 		return nil, err
 	}
 
@@ -80,7 +81,7 @@ func (db *CtxDB) createSchema() error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	tables := []string{"segments", "blobs", "sections"}
 	for _, tbl := range tables {

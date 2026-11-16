@@ -4,41 +4,54 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
-func TestCtxDBCreatesSchema(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "sub", "test.db")
+// invalidPathCase holds a single invalid-path subtest for OpenCtxDB.
+type invalidPathCase struct {
+	name string
+	path string
+}
 
-	// Invalid paths
-	if _, err := OpenCtxDB(""); err != ErrCtxDBInvalid {
-		t.Fatalf("expected ErrCtxDBInvalid for empty, got %v", err)
-	}
-	if _, err := OpenCtxDB(" "); err != ErrCtxDBInvalid {
-		t.Fatalf("expected ErrCtxDBInvalid for space, got %v", err)
-	}
-	if _, err := OpenCtxDB("relative/path"); err != ErrCtxDBInvalid {
-		t.Fatalf("expected ErrCtxDBInvalid for relative, got %v", err)
-	}
-	if _, err := OpenCtxDB("~/relative"); err != ErrCtxDBInvalid {
-		t.Fatalf("expected ErrCtxDBInvalid for tilde, got %v", err)
-	}
+// invalidPathCases is the package-level table of invalid path inputs.
+var invalidPathCases = []invalidPathCase{
+	{name: "empty", path: ""},
+	{name: "space", path: " "},
+	{name: "relative", path: "relative/path"},
+	{name: "tilde", path: "~/relative"},
+}
 
-	db, err := OpenCtxDB(dbPath)
-	if err != nil {
-		t.Fatalf("OpenCtxDB failed: %v", err)
+// testInvalidPaths verifies that OpenCtxDB rejects every invalid path.
+func testInvalidPaths(t *testing.T) {
+	t.Helper()
+	for _, tc := range invalidPathCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := OpenCtxDB(tc.path); err != ErrCtxDBInvalid {
+				t.Fatalf("expected ErrCtxDBInvalid for %s, got %v", tc.name, err)
+			}
+		})
 	}
-	defer db.Close()
+}
 
-	info, err := os.Stat(filepath.Dir(dbPath))
+// testParentDirPerm verifies the parent directory is created with 0700 permissions.
+func testParentDirPerm(t *testing.T, dir string) {
+	t.Helper()
+	info, err := os.Stat(dir)
 	if err != nil {
 		t.Fatalf("stat parent dir: %v", err)
+	}
+	if runtime.GOOS == "windows" {
+		return // Windows has no POSIX permission bits; the directory existing is the check there
 	}
 	if info.Mode().Perm() != 0700 {
 		t.Fatalf("expected parent dir perm 0700, got %v", info.Mode().Perm())
 	}
+}
 
+// testTablesExist verifies that each required table and its FTS virtual table exist.
+func testTablesExist(t *testing.T, db *CtxDB) {
+	t.Helper()
 	tables := []string{"segments", "blobs", "sections"}
 	for _, tbl := range tables {
 		var name string
@@ -50,7 +63,12 @@ func TestCtxDBCreatesSchema(t *testing.T) {
 			t.Fatalf("FTS table %s_fts missing: %v", tbl, err)
 		}
 	}
+}
 
+// testTableColumns verifies column definitions via PRAGMA table_info.
+func testTableColumns(t *testing.T, db *CtxDB) {
+	t.Helper()
+	tables := []string{"segments", "blobs", "sections"}
 	for _, tbl := range tables {
 		rows, err := db.DB.Query("PRAGMA table_info(" + tbl + ")")
 		if err != nil {
@@ -74,9 +92,15 @@ func TestCtxDBCreatesSchema(t *testing.T) {
 				t.Fatalf("text column invalid in %s", tbl)
 			}
 		}
-		rows.Close()
+		if err := rows.Close(); err != nil {
+			t.Fatalf("close rows: %v", err)
+		}
 	}
+}
 
+// testReopen verifies that opening an existing database is idempotent.
+func testReopen(t *testing.T, dbPath string) {
+	t.Helper()
 	db2, err := OpenCtxDB(dbPath)
 	if err != nil {
 		t.Fatalf("Reopen failed: %v", err)
@@ -84,7 +108,11 @@ func TestCtxDBCreatesSchema(t *testing.T) {
 	if err := db2.Close(); err != nil {
 		t.Fatalf("Close db2: %v", err)
 	}
+}
 
+// testNilClose verifies that Close on nil or empty CtxDB returns ErrCtxDBInvalid.
+func testNilClose(t *testing.T) {
+	t.Helper()
 	var nilDb *CtxDB
 	if err := nilDb.Close(); err != ErrCtxDBInvalid {
 		t.Fatalf("nil db Close should return ErrCtxDBInvalid, got %v", err)
@@ -93,4 +121,24 @@ func TestCtxDBCreatesSchema(t *testing.T) {
 	if err := emptyDb.Close(); err != ErrCtxDBInvalid {
 		t.Fatalf("empty db Close should return ErrCtxDBInvalid, got %v", err)
 	}
+}
+
+// TestCtxDBCreatesSchema tests schema creation, validation, and edge cases.
+func TestCtxDBCreatesSchema(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "sub", "test.db")
+
+	testInvalidPaths(t)
+
+	db, err := OpenCtxDB(dbPath)
+	if err != nil {
+		t.Fatalf("OpenCtxDB failed: %v", err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	testParentDirPerm(t, filepath.Dir(dbPath))
+	testTablesExist(t, db)
+	testTableColumns(t, db)
+	testReopen(t, dbPath)
+	testNilClose(t)
 }
