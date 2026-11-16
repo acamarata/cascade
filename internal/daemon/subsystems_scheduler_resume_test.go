@@ -53,6 +53,11 @@ func newDaemonTestResumeStore(t *testing.T) *jobs.Store {
 	if err := jobs.ApplyOutboxSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
 		t.Fatalf("ApplyOutboxSchema: %v", err)
 	}
+	// The start-time readmit reads the delegation table for a committed
+	// reservation, as the production cascade.db carries it.
+	if err := jobs.ApplyDelegationSchema(context.Background(), db, migrate.SQLiteEmitter{}, clock, "", ""); err != nil {
+		t.Fatalf("ApplyDelegationSchema: %v", err)
+	}
 	return jobs.NewStore(db)
 }
 
@@ -106,6 +111,9 @@ func TestRegisterScheduler_ResumesStaleRunningJobAtLeased(t *testing.T) {
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewFixedClock(fixedResumeNow))
+	// A refused reservation keeps the re-entered job at `leased`, so this
+	// test observes Resume's own re-entry; the readmit has its own test.
+	bindTestReservation(m).failJob = "resume-job-1"
 	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewFixedClock(fixedResumeNow), designatedControllerBinding(t), "sched-test-resume", store, js, 0)
 	if err != nil {
 		t.Fatalf("RegisterScheduler: %v", err)
@@ -144,6 +152,7 @@ func TestRegisterScheduler_ResumeSkippedOnNonController(t *testing.T) {
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewFixedClock(fixedResumeNow))
+	bindTestReservation(m)
 	// boundNodeBinding holds a complete binding and no designation, so
 	// nodes.ResolveRole resolves RoleNode.
 	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewFixedClock(fixedResumeNow), boundNodeBinding(t), "sched-test-resume-node", store, js, 0)

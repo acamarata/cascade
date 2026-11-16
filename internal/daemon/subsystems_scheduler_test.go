@@ -68,6 +68,7 @@ func TestRegisterScheduler_ControllerRoleStartsAndConsumesRealEvent(t *testing.T
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewSystemClock())
+	bindTestReservation(m)
 	sched, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), designatedControllerBinding(t), "sched-test-controller", nil, nil, 0)
 	if err != nil {
 		t.Fatalf("RegisterScheduler: %v", err)
@@ -118,6 +119,7 @@ func TestRegisterScheduler_SubscribeFailureRecordsFailed(t *testing.T) {
 	defer cancel()
 
 	m := NewManifest(nil, runtime.NewSystemClock())
+	bindTestReservation(m)
 	binding := designatedControllerBinding(t)
 	if _, err := m.RegisterScheduler(ctx, bus, runtime.NewSystemClock(), binding, "sched-test-dup", nil, nil, 0); err != nil {
 		t.Fatalf("first RegisterScheduler: %v", err)
@@ -152,6 +154,7 @@ func TestRegisterScheduler_ResolveRoleErrorRecordsFailed(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			m := NewManifest(nil, runtime.NewSystemClock())
+			bindTestReservation(m)
 			sched, err := m.RegisterScheduler(context.Background(), newSchedulerTestBus(), runtime.NewSystemClock(), tc.binding, "sched-test-resolve-err", nil, nil, 0)
 			if err != nil || sched != nil {
 				t.Fatalf("RegisterScheduler on a role conflict = %v, %v; want nil, nil (daemon start goes on)", sched, err)

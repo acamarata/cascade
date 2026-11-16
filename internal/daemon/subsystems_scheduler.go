@@ -78,6 +78,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/acamarata/cascade/internal/events"
@@ -122,6 +123,52 @@ func (r schedulerJournalReader) Replay(ctx context.Context, entityID string, cur
 	return out, nil
 }
 
+// errSchedulerReservationUnset is RegisterScheduler's refusal when no
+// SetSchedulerReservation call bound the fleet reservation seam first.
+var errSchedulerReservationUnset = cascade.New(cascade.KindInvalidInput,
+	"daemon: scheduler: no reservation seam bound; call SetSchedulerReservation before RegisterScheduler")
+
+// schedulerSeam is the fleet reservation pair (contract fleet-reservation)
+// a re-entered job is re-admitted through. The scheduler holds no
+// per-node governor permit: the reservation ledger is the admission.
+type schedulerSeam struct {
+	reserve jobs.ReserveFn
+	adopt   jobs.AdoptFn
+}
+
+// schedulerSeams associates a Manifest with its bound seam. It is keyed by
+// the Manifest pointer so the seam needs no new Manifest field; a daemon
+// process builds one Manifest, so the table holds one row in production.
+var schedulerSeams sync.Map
+
+// SetSchedulerReservation binds the reservation seam RegisterScheduler
+// requires. The conductor-phase wiring calls it before the supervised
+// phase registers the scheduler. Both functions must be non-nil, or
+// RegisterScheduler refuses exactly as if nothing were bound.
+func (m *Manifest) SetSchedulerReservation(reserve jobs.ReserveFn, adopt jobs.AdoptFn) {
+	schedulerSeams.Store(m, schedulerSeam{reserve: reserve, adopt: adopt})
+}
+
+// schedulerReservation returns m's bound seam; ok is false when none was
+// bound or either half is nil (fail closed).
+func (m *Manifest) schedulerReservation() (schedulerSeam, bool) {
+	v, found := schedulerSeams.Load(m)
+	if !found {
+		return schedulerSeam{}, false
+	}
+	seam, _ := v.(schedulerSeam)
+	return seam, seam.reserve != nil && seam.adopt != nil
+}
+
+// schedulerResumeDeps carries runSchedulerResume's inputs.
+type schedulerResumeDeps struct {
+	store     *jobs.Store
+	journal   journal.Store
+	heartbeat time.Duration
+	seam      schedulerSeam
+	clock     runtime.Clock
+}
+
 // RegisterScheduler resolves this daemon's controller Role, constructs the
 // real jobs.Scheduler, runs Resume once against store/j (see this file's
 // RESUME POLICY doc comment above for the two outcomes), then subscribes
@@ -136,9 +183,16 @@ func (r schedulerJournalReader) Replay(ctx context.Context, entityID string, cur
 // (nil, nil): the daemon still reaches Ready. A Subscribe failure is recorded
 // as Failed and returned; the consumer's own terminal error, if any, is
 // recorded as Failed asynchronously since it only returns after ctx ends
-// or the subscription's channel closes.
+// or the subscription's channel closes. Registration refuses with
+// KindInvalidInput, before anything else, when SetSchedulerReservation
+// has not bound the reservation seam.
 func (m *Manifest) RegisterScheduler(ctx context.Context, bus *events.Bus, clock runtime.Clock, binding nodes.ControllerBindingBackend, cursorName string, store *jobs.Store, j journal.Store, heartbeatInterval time.Duration) (*jobs.Scheduler, error) {
 	m.Register(jobSchedulerSubsystem)
+	seam, ok := m.schedulerReservation()
+	if !ok {
+		m.Failed(jobSchedulerSubsystem, errSchedulerReservationUnset.Error())
+		return nil, errSchedulerReservationUnset
+	}
 	role, err := nodes.ResolveRole(binding)
 	if err != nil {
 		// A role conflict degrades this subsystem only: the daemon keeps
@@ -149,7 +203,7 @@ func (m *Manifest) RegisterScheduler(ctx context.Context, bus *events.Bus, clock
 	roleCtx := nodes.WithRole(ctx, role)
 	sched := jobs.NewScheduler(clock)
 
-	resumeDetail, err := runSchedulerResume(roleCtx, sched, store, j, heartbeatInterval)
+	resumeDetail, err := runSchedulerResume(roleCtx, sched, schedulerResumeDeps{store: store, journal: j, heartbeat: heartbeatInterval, seam: seam, clock: clock})
 	if err != nil {
 		m.Failed(jobSchedulerSubsystem, err.Error())
 		return nil, err
@@ -172,20 +226,26 @@ func (m *Manifest) RegisterScheduler(ctx context.Context, bus *events.Bus, clock
 // runSchedulerResume applies this file's RESUME POLICY: a nil store skips
 // Resume (detail says so); a PermissionDenied refusal (non-controller) is
 // swallowed and reported in the detail string, never as an error; any
-// other error is returned for the caller to treat as fatal.
-func runSchedulerResume(roleCtx context.Context, sched *jobs.Scheduler, store *jobs.Store, j journal.Store, heartbeatInterval time.Duration) (string, error) {
-	if store == nil {
+// other error is returned for the caller to treat as fatal. After a
+// successful Resume every job left at `leased` is re-admitted through the
+// reservation seam (readmitLeasedJobs, subsystems_scheduler_events.go).
+func runSchedulerResume(roleCtx context.Context, sched *jobs.Scheduler, d schedulerResumeDeps) (string, error) {
+	if d.store == nil {
 		return "resume skipped: no store wired", nil
 	}
 	var reader jobs.Reader
-	if j != nil {
-		reader = schedulerJournalReader{store: j}
+	if d.journal != nil {
+		reader = schedulerJournalReader{store: d.journal}
 	}
-	if _, err := sched.Resume(roleCtx, store, reader, heartbeatInterval, nil, nil); err != nil {
+	if _, err := sched.Resume(roleCtx, d.store, reader, d.heartbeat, nil, nil); err != nil {
 		if cascade.HasKind(err, cascade.KindPermissionDenied) {
 			return "resume skipped: not controller", nil
 		}
 		return "", err
 	}
-	return "resume ran", nil
+	readmitted, waiting, err := readmitLeasedJobs(roleCtx, sched, d)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("resume ran; readmitted %d, %d left waiting", readmitted, waiting), nil
 }

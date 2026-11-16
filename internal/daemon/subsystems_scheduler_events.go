@@ -3,7 +3,8 @@ package daemon
 // Purpose: RegisterScheduler's (subsystems_scheduler.go) companion
 //
 //	translator and consumer loop -- split to its own file purely to keep
-//	subsystems_scheduler.go under the 300-line cap (Art.10.3), the same
+//	subsystems_scheduler.go under the 300-line cap; it also holds the
+//	start-time readmit of jobs found at `leased` (Art.10.3), the same
 //	rationale subsystems_worktree.go records for its own split from
 //	subsystems.go.
 //
@@ -145,4 +146,61 @@ func dispatchSchedulerEvent(ctx context.Context, sched *jobs.Scheduler, ev event
 		return delta.Errors[0]
 	}
 	return nil
+}
+
+// readmitLeasedJobs re-admits every job at `leased` (Resume's re-entries
+// and any left there by an earlier start) through jobs.Scheduler.Readmit.
+// A live delegation row holding a reservation id is the committed row the
+// job adopts; otherwise a fresh reservation is taken. Success moves the
+// job to running. A seam error leaves the row at `leased`, which the store
+// cannot move back to pending, and which admission treats as pending, so
+// the job waits for a normal admission and is never dropped.
+func readmitLeasedJobs(ctx context.Context, sched *jobs.Scheduler, d schedulerResumeDeps) (readmitted, waiting int, err error) {
+	ids, err := leasedJobIDs(ctx, d.store)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, id := range ids {
+		req := jobs.ReadmitRequest{JobID: id, State: jobs.JobStateLeased}
+		rec, found, err := d.store.DelegationByJobID(ctx, id)
+		if err != nil {
+			return readmitted, waiting, err
+		}
+		if found && rec.State == jobs.DelegationLive {
+			req.ReservationID = rec.ReservationID
+		}
+		tr, seamErr := sched.Readmit(ctx, req, d.seam.adopt, d.seam.reserve)
+		switch {
+		case seamErr == nil && tr.To == jobs.JobStateRunning:
+			if err := d.store.PutTransition(ctx, id, jobs.JobStateRunning, d.clock.Now().Unix()); err != nil {
+				return readmitted, waiting, err
+			}
+			readmitted++
+		case seamErr != nil && tr.To == jobs.JobStatePending:
+			waiting++
+		default:
+			return readmitted, waiting, seamErr
+		}
+	}
+	return readmitted, waiting, nil
+}
+
+// leasedJobIDs pages through the store's job list for every job at
+// `leased`.
+func leasedJobIDs(ctx context.Context, store *jobs.Store) ([]string, error) {
+	var ids []string
+	cursor := ""
+	for {
+		page, next, err := store.ListJobs(ctx, jobs.JobFilter{State: jobs.JobStateLeased, Cursor: cursor})
+		if err != nil {
+			return nil, err
+		}
+		for _, j := range page {
+			ids = append(ids, j.ID)
+		}
+		if next == "" {
+			return ids, nil
+		}
+		cursor = next
+	}
 }
