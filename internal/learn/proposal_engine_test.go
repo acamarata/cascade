@@ -179,3 +179,38 @@ func TestDetectPatternsReadErrorRefuses(t *testing.T) {
 		t.Fatal("read error produced partial results")
 	}
 }
+
+type countingOutcomeReader struct{ calls int }
+
+func (r *countingOutcomeReader) ReadWindow(context.Context, time.Time, time.Time) ([]OutcomeRow, error) {
+	r.calls++
+	return nil, nil
+}
+
+// TestDetectPatternsRuleTableRefusal verifies a rule table that fails
+// classification refuses the pass before any read or proposal.
+func TestDetectPatternsRuleTableRefusal(t *testing.T) {
+	cause := errors.New("classify failed")
+	orig := classifyChange
+	classifyChange = func(string, Change) (Classification, error) { return Classification{}, cause }
+	t.Cleanup(func() { classifyChange = orig })
+	r, l := &countingOutcomeReader{}, &patternLookup{}
+	subs, triggers, err := DetectPatterns(context.Background(), r, l, newTestClock().Now(), Window)
+	if !cascade.HasKind(err, cascade.KindInternal) || !errors.Is(err, cause) {
+		t.Fatalf("wrong table refusal: %v", err)
+	}
+	if subs != nil || triggers != nil || r.calls != 0 || len(l.seen) != 0 {
+		t.Fatal("refused pass read or proposed")
+	}
+}
+
+// TestDetectPatternsRuleTablePasses verifies the shipped table classifies.
+func TestDetectPatternsRuleTablePasses(t *testing.T) {
+	r := &countingOutcomeReader{}
+	if _, _, err := DetectPatterns(context.Background(), r, &patternLookup{}, newTestClock().Now(), Window); err != nil {
+		t.Fatalf("normal table refused: %v", err)
+	}
+	if r.calls != 1 {
+		t.Fatalf("reads = %d, want 1", r.calls)
+	}
+}

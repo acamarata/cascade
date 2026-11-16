@@ -60,10 +60,14 @@ type patternGroup struct {
 
 // DetectPatterns returns pending proposal inputs without applying or storing them.
 // The earliest outcome's lane is the beneficiary of each signature. It never
-// supports its own proposal. Lookup and reader errors refuse the entire pass.
+// supports its own proposal. Lookup and reader errors, and a rule table that
+// fails classification, refuse the entire pass.
 func DetectPatterns(ctx context.Context, r OutcomeReader, existing ProposalLookup, now time.Time, window time.Duration) ([]Submission, []Trigger, error) {
 	if r == nil || existing == nil || now.IsZero() || window <= 0 || window > Window {
 		return nil, nil, cascade.New(cascade.KindInvalidInput, "learn: invalid pattern detection inputs")
+	}
+	if _, err := ClassifyProposalTierTable(ProposalRules()); err != nil {
+		return nil, nil, cascade.Wrap(cascade.KindInternal, err, "learn: proposal rule table refused")
 	}
 	from := now.Add(-window)
 	rows, err := r.ReadWindow(ctx, from, now)

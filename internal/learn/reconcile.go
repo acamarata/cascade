@@ -67,6 +67,44 @@ const reconcilePageLimit = 500
 type OutcomeReconciler struct {
 	Store  *jobs.Store
 	Writer OutcomeWriter
+	// Provenance supplies authenticated structured tool provenance. Nil
+	// leaves every component unknown.
+	Provenance ToolProvenanceReader
+}
+
+// GeneratedCodeComponent is the component label a tool failure in generated
+// code carries; it is the key of the generated-code proposal rule.
+const GeneratedCodeComponent = "generated-code"
+
+// ToolProvenance is a job's structured tool result: the component the tool
+// identified and whether the result was authenticated by the controller.
+type ToolProvenance struct {
+	Component     string
+	Authenticated bool
+}
+
+// ToolProvenanceReader reads the structured tool provenance of a terminal
+// job. found is false when the job has none. A read error is returned, never
+// read as absence.
+type ToolProvenanceReader interface {
+	ToolProvenance(ctx context.Context, jobID string) (p ToolProvenance, found bool, err error)
+}
+
+// withComponent sets Component to generated-code only when the reader finds
+// authenticated structured provenance naming it. Absent, unverified or any
+// other label (including one a model supplied) stays unknown.
+func (rec OutcomeReconciler) withComponent(ctx context.Context, o TelemetryOutcome) (TelemetryOutcome, error) {
+	if rec.Provenance == nil {
+		return o, nil
+	}
+	p, found, err := rec.Provenance.ToolProvenance(ctx, o.JobID)
+	if err != nil {
+		return o, err
+	}
+	if found && p.Authenticated && p.Component == GeneratedCodeComponent {
+		o.Component = GeneratedCodeComponent
+	}
+	return o, nil
 }
 
 // Reconcile walks every terminal JobState, paging by cursor, and calls
@@ -101,7 +139,11 @@ func (rec OutcomeReconciler) reconcileState(ctx context.Context, state jobs.JobS
 			return refused, err
 		}
 		for _, j := range page {
-			err := rec.Writer.Record(ctx, outcomeFromJob(j, state))
+			o, err := rec.withComponent(ctx, outcomeFromJob(j, state))
+			if err != nil {
+				return refused, err
+			}
+			err = rec.Writer.Record(ctx, o)
 			switch {
 			case err == nil:
 			case cascade.HasKind(err, cascade.KindInvalidInput):
