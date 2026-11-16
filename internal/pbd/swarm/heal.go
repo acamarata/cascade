@@ -3,8 +3,15 @@ package swarm
 
 import (
 	"errors"
+	cruntime "github.com/acamarata/cascade/internal/runtime"
 	"time"
 )
+
+// Clock provides time-related operations for dependency injection.
+type Clock interface {
+	// Now returns the current time.
+	Now() time.Time
+}
 
 // ErrNoCurrentMain is returned when HealConfig.CurrentMain is empty.
 var ErrNoCurrentMain = errors.New("swarm: no current main branch configured")
@@ -91,13 +98,19 @@ func ArchiveRun(run StaleRun, clock func() time.Time) (string, error) {
 // the attempt counts into the ledger. It returns ErrNoCurrentMain if currentMain
 // is empty. It populates HealResult.ReopenedTickets with the ticket identifiers
 // derived from run.RunName, sets HealResult.CarriedAttempts to run.AttemptCount,
-// and sets HealResult.RenamedTo using ArchiveRun output.
-func ReopenOnCurrentMain(run StaleRun, currentMain string) (*HealResult, error) {
+// and sets HealResult.RenamedTo using ArchiveRun output. An optional Clock may
+// be provided as the third argument; otherwise internal/runtime.SystemClock is used.
+func ReopenOnCurrentMain(run StaleRun, currentMain string, clock ...Clock) (*HealResult, error) {
 	if currentMain == "" {
 		return nil, ErrNoCurrentMain
 	}
 
-	renamedTo, err := ArchiveRun(run, time.Now)
+	c := Clock(cruntime.SystemClock{})
+	if len(clock) > 0 && clock[0] != nil {
+		c = clock[0]
+	}
+
+	renamedTo, err := ArchiveRun(run, c.Now)
 	if err != nil {
 		return nil, err
 	}

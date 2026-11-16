@@ -20,11 +20,11 @@ func (s *fakeStore) HasRun(id string) (bool, error) {
 	return s.runs[id], nil
 }
 
-func (s *fakeStore) HasRecommendation(day string) (bool, error) {
+func (s *fakeStore) HasRecommendation(_ string) (bool, error) {
 	return false, nil
 }
 
-func (s *fakeStore) Commit(run Run, day string, rec Rec, hasRec bool) error {
+func (s *fakeStore) Commit(run Run, _ string, _ Rec, _ bool) error {
 	s.commitCalls.Add(1)
 	s.runs[run.ID] = true
 	return nil
@@ -43,7 +43,7 @@ type fakeInbox struct {
 	called atomic.Bool
 }
 
-func (i *fakeInbox) Notify(rec Rec) error {
+func (i *fakeInbox) Notify(_ Rec) error {
 	i.called.Store(true)
 	return nil
 }
@@ -64,55 +64,42 @@ func TestRecordsCodeRun(t *testing.T) {
 		t.Fatalf("expected 1 commit, got %d", got)
 	}
 
-	// nil/empty domains commit no Rec but still commit the run
-	store2 := newFakeStore()
-	hook2 := EndHook{Store: store2, Decider: decider, Inbox: inbox}
-	if err := hook2.OnRunEnd(Run{ID: "r2", Kind: "code", EndedAt: run.EndedAt}, nil); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got := store2.commitCalls.Load(); got != 1 {
-		t.Fatalf("expected 1 commit for nil domains, got %d", got)
-	}
+	testNilDomains(t, decider, inbox, run.EndedAt)
+	testSkipsCallbacks(t, hook, decider, inbox, run.EndedAt)
 
-	// Chat or Private returns nil before callbacks
-	decider.called.Store(false)
-	inbox.called.Store(false)
-	if err := hook.OnRunEnd(Run{ID: "r3", Kind: "chat", EndedAt: run.EndedAt}, []string{"d"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if decider.called.Load() || inbox.called.Load() {
-		t.Fatal("chat should not call decider or inbox")
-	}
+	runInvalidCases(t, hook, store, decider, inbox, run.EndedAt)
+	testDuplicateRun(t, hook, store, run)
+}
 
-	decider.called.Store(false)
-	inbox.called.Store(false)
-	if err := hook.OnRunEnd(Run{ID: "r4", Kind: "code", Private: true, EndedAt: run.EndedAt}, []string{"d"}); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if decider.called.Load() || inbox.called.Load() {
-		t.Fatal("private should not call decider or inbox")
-	}
+// invalidCase describes a single invalid-input scenario for OnRunEnd.
+type invalidCase struct {
+	name    string
+	run     Run
+	domains []string
+	hook    EndHook
+}
 
-	// Invalid inputs table
-	invalidCases := []struct {
-		name    string
-		run     Run
-		domains []string
-		hook    EndHook
-	}{
-		{"bad kind", Run{ID: "x", Kind: "bad", EndedAt: run.EndedAt}, []string{"d"}, hook},
-		{"empty id", Run{ID: "", Kind: "code", EndedAt: run.EndedAt}, []string{"d"}, hook},
-		{"whitespace id", Run{ID: "a b", Kind: "code", EndedAt: run.EndedAt}, []string{"d"}, hook},
+// buildInvalidCases creates the table of invalid-input scenarios.
+func buildInvalidCases(hook EndHook, store *fakeStore, decider *fakeDecider, inbox *fakeInbox, endedAt time.Time) []invalidCase {
+	return []invalidCase{
+		{"bad kind", Run{ID: "x", Kind: "bad", EndedAt: endedAt}, []string{"d"}, hook},
+		{"empty id", Run{ID: "", Kind: "code", EndedAt: endedAt}, []string{"d"}, hook},
+		{"whitespace id", Run{ID: "a b", Kind: "code", EndedAt: endedAt}, []string{"d"}, hook},
 		{"zero endedat", Run{ID: "x", Kind: "code"}, []string{"d"}, hook},
-		{"nil store", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{"d"}, EndHook{Decider: decider, Inbox: inbox}},
-		{"nil decider", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{"d"}, EndHook{Store: store, Inbox: inbox}},
-		{"nil inbox", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{"d"}, EndHook{Store: store, Decider: decider}},
-		{"typed nil store", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{"d"}, EndHook{Store: (*fakeStore)(nil), Decider: decider, Inbox: inbox}},
-		{"blank domain", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{""}, hook},
-		{"padded domain", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{" d "}, hook},
-		{"duplicate domain", Run{ID: "x", Kind: "code", EndedAt: run.EndedAt}, []string{"d", "d"}, hook},
+		{"nil store", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{"d"}, EndHook{Decider: decider, Inbox: inbox}},
+		{"nil decider", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{"d"}, EndHook{Store: store, Inbox: inbox}},
+		{"nil inbox", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{"d"}, EndHook{Store: store, Decider: decider}},
+		{"typed nil store", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{"d"}, EndHook{Store: (*fakeStore)(nil), Decider: decider, Inbox: inbox}},
+		{"blank domain", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{""}, hook},
+		{"padded domain", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{" d "}, hook},
+		{"duplicate domain", Run{ID: "x", Kind: "code", EndedAt: endedAt}, []string{"d", "d"}, hook},
 	}
-	for _, tc := range invalidCases {
+}
+
+// runInvalidCases executes each invalid-case subtest against t.
+func runInvalidCases(t *testing.T, hook EndHook, store *fakeStore, decider *fakeDecider, inbox *fakeInbox, endedAt time.Time) {
+	t.Helper()
+	for _, tc := range buildInvalidCases(hook, store, decider, inbox, endedAt) {
 		t.Run(tc.name, func(t *testing.T) {
 			err := tc.hook.OnRunEnd(tc.run, tc.domains)
 			if !errors.Is(err, ErrInvalidRunEndInput) {
@@ -120,13 +107,56 @@ func TestRecordsCodeRun(t *testing.T) {
 			}
 		})
 	}
+}
 
-	// Duplicate run
+// testDuplicateRun verifies that a duplicate run returns ErrDuplicateRun.
+func testDuplicateRun(t *testing.T, hook EndHook, store *fakeStore, run Run) {
+	t.Helper()
 	err := hook.OnRunEnd(run, []string{"domain1"})
 	if !errors.Is(err, ErrDuplicateRun) {
 		t.Fatalf("expected ErrDuplicateRun, got %v", err)
 	}
 	if got := store.commitCalls.Load(); got != 1 {
 		t.Fatalf("duplicate should not commit, got %d commits", got)
+	}
+}
+
+// testNilDomains verifies behaviour when no domains are provided.
+func testNilDomains(t *testing.T, decider *fakeDecider, inbox *fakeInbox, _ time.Time) {
+	t.Helper()
+	decider.called.Store(false)
+	inbox.called.Store(false)
+	store2 := newFakeStore()
+	hook2 := EndHook{Store: store2, Decider: decider, Inbox: inbox}
+	run2 := Run{ID: "r2", Kind: "code", EndedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+	if err := hook2.OnRunEnd(run2, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if decider.called.Load() {
+		t.Fatal("decider should not be called with nil domains")
+	}
+	if inbox.called.Load() {
+		t.Fatal("inbox should not be called with nil domains")
+	}
+}
+
+// testSkipsCallbacks verifies that chat and private runs skip callbacks.
+func testSkipsCallbacks(t *testing.T, hook EndHook, decider *fakeDecider, inbox *fakeInbox, _ time.Time) {
+	t.Helper()
+	decider.called.Store(false)
+	inbox.called.Store(false)
+	chatRun := Run{ID: "r3", Kind: "chat", EndedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+	if err := hook.OnRunEnd(chatRun, []string{"d"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if decider.called.Load() {
+		t.Fatal("decider should not be called for chat runs")
+	}
+	privRun := Run{ID: "r4", Kind: "code", Private: true, EndedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+	if err := hook.OnRunEnd(privRun, []string{"d"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if decider.called.Load() {
+		t.Fatal("decider should not be called for private runs")
 	}
 }

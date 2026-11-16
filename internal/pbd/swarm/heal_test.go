@@ -190,3 +190,31 @@ func TestAttemptCountCarried(t *testing.T) {
 		t.Errorf("expected RenamedTo to start with %q, got %q", expectedPrefix, res.RenamedTo)
 	}
 }
+
+// TestReopenUsesInjectedClock verifies that ReopenOnCurrentMain uses the injected clock instead of time.Now.
+func TestReopenUsesInjectedClock(t *testing.T) {
+	fixedTime := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
+	run := StaleRun{
+		RunName:      "run-clock",
+		Reason:       "stale-base",
+		AttemptCount: 1,
+	}
+
+	res, err := ReopenOnCurrentMain(run, "main", &frozenClock{t: fixedTime})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	expected := "run-clock.stale-20261116T120000Z"
+	if res.RenamedTo != expected {
+		t.Errorf("expected RenamedTo %q, got %q", expected, res.RenamedTo)
+	}
+}
+
+type frozenClock struct {
+	t time.Time
+}
+
+func (f *frozenClock) Now() time.Time {
+	return f.t
+}
