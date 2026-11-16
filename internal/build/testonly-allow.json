@@ -1476,5 +1476,13 @@
     "reason": "P1-TOP-13d ships RefreshGrantOnce, the custody-gated grant path, with its fake-driven tests; its first production caller is the usage poller from P1-TOP-13e (the release-gate leg of P1-EXIT-15 is the second).",
     "retire_ticket": "P1-TOP-13e",
     "symbol": "internal/fleet/economics.RefreshGrantOnce"
+  },
+  {
+    "added_by_ticket": "P1-HRN-14a",
+    "caller_site": "internal/mcp/initialize.go",
+    "expected_caller": "internal/mcp/initialize.go, the initialize negotiation that answers a client offering an unsupported revision with a member of SupportedProtocolVersions; retire this entry once that file reads it",
+    "reason": "P1-HRN-14a declares the supported version set as part of the replay contract (contract:mcp-wire-protocol) and asserts it in the replay test, but the negotiation that reads it in initialize.go is P1-HRN-14b's change.",
+    "retire_ticket": "P1-HRN-14b",
+    "symbol": "internal/mcp.SupportedProtocolVersions"
   }
 ]
