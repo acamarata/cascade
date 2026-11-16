@@ -89,14 +89,19 @@ func registerCompletionGate(ctx context.Context, registry *rpc.Registry, store p
 	if err != nil {
 		return nil, err
 	}
+	// Approvals is the daemon's one queue (policyWiring.Queue from w.Deps).
+	approvals, err := completionApprovalsFor(ctx, verifier)
+	if err != nil {
+		return nil, err
+	}
 	policy, err := jobs.NewCompletionPolicy(jobs.CompletionPolicyDeps{
 		Store: jstore, Ledger: ledger, Bus: bus, Clock: clock, EngineID: completionGateEngineID,
-		Acceptance: verifier, RequireAcceptance: true, Reviewer: enforcement,
+		Acceptance: verifier, RequireAcceptance: true, Reviewer: enforcement, Approvals: approvals.approvalQueue(),
 	})
 	if err != nil {
 		return nil, err
 	}
-	gate := &completionPolicyGate{policy: policy, store: jstore, checkpoints: checkpoints, reviewerTree: reviewer.treeSource()}
+	gate := approvals.gate(&completionPolicyGate{policy: policy, store: jstore, checkpoints: checkpoints, reviewerTree: reviewer.treeSource()})
 	resolver := &completionJobResolver{store: jstore}
 	if err := hookpacks.RegisterCompletionHookPack(hookpacks.DefaultRegistry, gate, resolver); err != nil {
 		return nil, err
