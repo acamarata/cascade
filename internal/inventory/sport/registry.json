@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-16T10:09:08Z",
+  "generated_at": "2026-11-16T11:41:36Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4661,6 +4661,20 @@
       ]
     },
     {
+      "name": "cmd/cascade completion approval path tests",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_approval_path_test.go",
+          "line": 12,
+          "status": "",
+          "raw": "cmd/cascade completion approval path tests."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
       "name": "cmd/cascade composition root",
       "sites": [
         {
@@ -5848,6 +5862,12 @@
     {
       "name": "cmd/cascade hooks composition tests",
       "sites": [
+        {
+          "file": "cmd/cascade/wire_hooks_composition_test.go",
+          "line": 10,
+          "status": "",
+          "raw": "cmd/cascade hooks composition tests (P1-SUP-02)."
+        },
         {
           "file": "cmd/cascade/wire_hooks_test.go",
           "line": 9,
@@ -35835,6 +35855,20 @@
       ]
     },
     {
+      "name": "learn/proposal-rules",
+      "sites": [
+        {
+          "file": "internal/learn/proposal_rules.go",
+          "line": 7,
+          "status": "ADD",
+          "raw": "learn/proposal-rules/ADD."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "learn/proposal_store_test",
       "sites": [
         {
@@ -45264,7 +45298,7 @@
       ]
     }
   ],
-  "total_sites": 4359,
-  "unspecified_count": 428,
+  "total_sites": 4362,
+  "unspecified_count": 429,
   "multi_status_count": 134
 }
