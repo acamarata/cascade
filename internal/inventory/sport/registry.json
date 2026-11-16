@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-16T03:47:12Z",
+  "generated_at": "2026-11-16T05:11:02Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4912,6 +4912,41 @@
       ]
     },
     {
+      "name": "cmd/cascade daemon conductor wiring",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_conductor_lanecap.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon conductor wiring (ADD)."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon gate-stall actions",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_gate_stall.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "cmd/cascade daemon gate-stall actions (ADDED, P1-PBD-04d)."
+        },
+        {
+          "file": "cmd/cascade/daemon_unix_gate_stall_test.go",
+          "line": 7,
+          "status": "",
+          "raw": "cmd/cascade daemon gate-stall actions (tests, P1-PBD-04d)."
+        }
+      ],
+      "statuses": [
+        "",
+        "ADD"
+      ]
+    },
+    {
       "name": "cmd/cascade daemon inbox delivery",
       "sites": [
         {
@@ -7068,6 +7103,20 @@
           "status": "ADD",
           "ticket": "P1-E19-W4-S42-T7",
           "raw": "cmd/cascade/backup views (ADD) — P1-E19-W4-S42-T7."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "cmd/cascade/completion-approval",
+      "sites": [
+        {
+          "file": "cmd/cascade/hooks_approval.go",
+          "line": 18,
+          "status": "ADD",
+          "raw": "cmd/cascade/completion-approval (ADD, P1-PBD-09)."
         }
       ],
       "statuses": [
@@ -23495,6 +23544,12 @@
     {
       "name": "internal/build doccheck",
       "sites": [
+        {
+          "file": "internal/build/doccheck_p1_agt_10c_test.go",
+          "line": 3,
+          "status": "ADD",
+          "raw": "internal/build doccheck (ADD)."
+        },
         {
           "file": "internal/build/doccheck_p1_agt_12d_test.go",
           "line": 2,
@@ -45147,7 +45202,7 @@
       ]
     }
   ],
-  "total_sites": 4349,
+  "total_sites": 4354,
   "unspecified_count": 427,
-  "multi_status_count": 133
+  "multi_status_count": 134
 }
