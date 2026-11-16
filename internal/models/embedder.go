@@ -1,3 +1,4 @@
+// Package models declares the embedding model seam and its net/http-free request and response types.
 package models
 
 import (
@@ -58,7 +59,7 @@ func (o *OllamaEmbedder) Local() bool {
 }
 
 // Embed generates embeddings for the given texts.
-func (o *OllamaEmbedder) Embed(ctx context.Context, texts []string) ([][]float32, error) {
+func (o *OllamaEmbedder) Embed(_ context.Context, texts []string) ([][]float32, error) {
 	if len(texts) == 0 {
 		return nil, ErrEmbedderInvalidInput
 	}

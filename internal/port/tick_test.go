@@ -17,10 +17,10 @@ func TestTickNeverOverlaps(t *testing.T) {
 	tk := &Tick{
 		WorkBound:     10,
 		LeaseDuration: time.Second,
-		AcquireLease: func(ctx context.Context, d time.Duration) error {
+		AcquireLease: func(_ context.Context, _ time.Duration) error {
 			return nil
 		},
-		Journal: func(ctx context.Context) ([]string, error) {
+		Journal: func(_ context.Context) ([]string, error) {
 			return []string{"a"}, nil
 		},
 	}
@@ -31,7 +31,7 @@ func TestTickNeverOverlaps(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		_ = tk.Run(ctx, func(ctx context.Context, items []string) error {
+		_ = tk.Run(ctx, func(_ context.Context, _ []string) error {
 			atomic.AddInt32(&calls, 1)
 			<-block
 			return nil
@@ -40,7 +40,7 @@ func TestTickNeverOverlaps(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	err := tk.Run(ctx, func(ctx context.Context, items []string) error {
+	err := tk.Run(ctx, func(_ context.Context, _ []string) error {
 		atomic.AddInt32(&calls, 1)
 		return nil
 	})
@@ -62,16 +62,16 @@ func TestTickBoundsWork(t *testing.T) {
 	tk := &Tick{
 		WorkBound:     2,
 		LeaseDuration: time.Second,
-		AcquireLease: func(ctx context.Context, d time.Duration) error {
+		AcquireLease: func(_ context.Context, _ time.Duration) error {
 			return nil
 		},
-		Journal: func(ctx context.Context) ([]string, error) {
+		Journal: func(_ context.Context) ([]string, error) {
 			return []string{"a", "b", "c", "d", "e"}, nil
 		},
 	}
 
 	var got []string
-	err := tk.Run(context.Background(), func(ctx context.Context, items []string) error {
+	err := tk.Run(context.Background(), func(_ context.Context, items []string) error {
 		got = items
 		return nil
 	})
@@ -88,16 +88,16 @@ func TestTickResumesFromJournal(t *testing.T) {
 	tk := &Tick{
 		WorkBound:     10,
 		LeaseDuration: time.Second,
-		AcquireLease: func(ctx context.Context, d time.Duration) error {
+		AcquireLease: func(_ context.Context, _ time.Duration) error {
 			return nil
 		},
-		Journal: func(ctx context.Context) ([]string, error) {
+		Journal: func(_ context.Context) ([]string, error) {
 			return []string{"x", "y"}, nil
 		},
 	}
 
 	var got []string
-	err := tk.Run(context.Background(), func(ctx context.Context, items []string) error {
+	err := tk.Run(context.Background(), func(_ context.Context, items []string) error {
 		got = items
 		return nil
 	})
