@@ -1,1 +1,2 @@
-{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"{\"job_id\":\"j_test\",\"status\":\"dispatched\"}"}]}}
+{"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2025-11-25","capabilities":{"tools":{"listChanged":false}},"serverInfo":{"name":"cascade","version":"dev"}}}
+{"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"{\"job_id\":\"j_test\",\"status\":\"dispatched\"}"}],"isError":false}}

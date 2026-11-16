@@ -3,7 +3,7 @@ package mcp_test
 import (
 	"bytes"
 	"context"
-	"errors"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -15,7 +15,10 @@ import (
 
 	"github.com/acamarata/cascade/internal/buildinfo"
 	"github.com/acamarata/cascade/internal/mcp"
+	"github.com/acamarata/cascade/internal/mcp/coretools"
+	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/plugin"
 )
 
 // goldensRoot is the capture tree every replay walks.
@@ -24,12 +27,6 @@ const goldensRoot = "testdata/goldens"
 // updateGoldens regenerates each replayable out.jsonl with Replay over its
 // unchanged in.jsonl. It is how a server-output change is re-captured.
 var updateGoldens = flag.Bool("update-goldens", false, "regenerate out.jsonl from in.jsonl")
-
-// awaitingCaptureJSON names captures whose capture.json lands with the
-// change that teaches ReplayAll's caller about daemon captures. A name here
-// is excused only while that file is absent, so the exemption ends by
-// itself; no other capture may go without one.
-var awaitingCaptureJSON = []string{"claude-code/delegate"}
 
 // buildCaptured is the replay's server builder: the production Server and
 // Dispatch over the registry the capture session had. No capture names a
@@ -53,47 +50,9 @@ func TestMCPGoldensReplayAllCaptures(t *testing.T) {
 	if !slices.Contains(mcp.SupportedProtocolVersions, mcp.MCPProtocolVersion) {
 		t.Errorf("SupportedProtocolVersions = %v lacks %q", mcp.SupportedProtocolVersions, mcp.MCPProtocolVersion)
 	}
-	if err := mcp.ReplayAll(ctx, replayableRoot(t), buildCaptured); err != nil {
+	if err := mcp.ReplayAll(ctx, goldensRoot, buildCaptured); err != nil {
 		t.Fatal(err)
 	}
-}
-
-// excusedCaptures returns the awaitingCaptureJSON names still without one.
-func excusedCaptures() []string {
-	var excused []string
-	for _, rel := range awaitingCaptureJSON {
-		_, err := os.Stat(filepath.Join(goldensRoot, filepath.FromSlash(rel), "capture.json"))
-		if errors.Is(err, os.ErrNotExist) {
-			excused = append(excused, rel)
-		}
-	}
-	return excused
-}
-
-// replayableRoot returns goldensRoot itself once every capture has its
-// capture.json. Until then it returns a mirror without the excused
-// directories, so ReplayAll's refusal stays absolute for everything else.
-func replayableRoot(t *testing.T) string {
-	t.Helper()
-	excused := excusedCaptures()
-	if len(excused) == 0 {
-		return goldensRoot
-	}
-	mirror := filepath.Join(t.TempDir(), "goldens")
-	if err := os.CopyFS(mirror, os.DirFS(goldensRoot)); err != nil {
-		t.Fatal(err)
-	}
-	for _, rel := range excused {
-		if err := os.RemoveAll(filepath.Join(mirror, filepath.FromSlash(rel))); err != nil {
-			t.Fatal(err)
-		}
-	}
-	readme, err := os.ReadFile(filepath.Join(filepath.Dir(goldensRoot), "README.md"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(filepath.Dir(mirror), "README.md"), string(readme))
-	return mirror
 }
 
 // writeFile writes content to path, creating its directory.
@@ -108,23 +67,15 @@ func writeFile(t *testing.T, path, content string) {
 }
 
 // regenerate rewrites each replayable capture's out.jsonl from Replay over
-// its unchanged in.jsonl. Daemon captures and excused ones are left alone.
+// its unchanged in.jsonl. Daemon captures are left alone.
 func regenerate(ctx context.Context, t *testing.T) {
 	t.Helper()
 	inputs, err := filepath.Glob(filepath.Join(goldensRoot, "*", "*", "in.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	excused := excusedCaptures()
 	for _, input := range inputs {
 		dir := filepath.Dir(input)
-		rel, err := filepath.Rel(goldensRoot, dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if slices.Contains(excused, filepath.ToSlash(rel)) {
-			continue
-		}
 		in, _, meta, err := mcp.ReadCapture(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -251,3 +202,71 @@ func TestCompareFramesServerVersion(t *testing.T) {
 		t.Error("a version outside serverInfo must compare literally")
 	}
 }
+
+// TestMCPReplaySkipsDaemonCaptures marks a capture needs:daemon whose frames
+// would fail if replayed, and asserts ReplayAll skips it, reports no failure
+// and never builds a server for it. The same capture without the mark must
+// fail, or the skip proved nothing.
+func TestMCPReplaySkipsDaemonCaptures(t *testing.T) {
+	daemonMeta := strings.TrimSuffix(tinyMeta, "}") + `,"needs":"daemon"}`
+	diverging := strings.Replace(tinyAnswer, "-32601", "-32600", 1)
+	built := 0
+	build := func(meta mcp.CaptureMeta) (*mcp.Server, error) {
+		built++
+		return buildEmpty(meta)
+	}
+	if err := mcp.ReplayAll(context.Background(), tinyRoot(t, tinyRow, daemonMeta, diverging), build); err != nil {
+		t.Fatalf("a needs:daemon capture was replayed: %v", err)
+	}
+	if built != 0 {
+		t.Fatalf("ReplayAll built %d servers for a needs:daemon capture, want 0", built)
+	}
+	if err := mcp.ReplayAll(context.Background(), tinyRoot(t, tinyRow, tinyMeta, diverging), build); err == nil {
+		t.Fatal("the same capture without needs:daemon must fail")
+	}
+}
+
+// delegateCapture is the claude-code session that called the delegate tool.
+const delegateCapture = "claude-code/delegate"
+
+// TestMCPDelegateSpec covers the delegate capture both ways. ReplayAll over
+// the committed tree accepts it as a needs:daemon capture (capture.json and
+// README row present) with the production builder, and its owner replay
+// drives in.jsonl through the production Server and the coretools delegate
+// registrations against a stand-in daemon, matching the recorded answer.
+func TestMCPDelegateSpec(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	if err := mcp.ReplayAll(ctx, goldensRoot, buildCaptured); err != nil {
+		t.Fatal(err)
+	}
+	in, out, meta, err := mcp.ReadCapture(filepath.Join(goldensRoot, filepath.FromSlash(delegateCapture)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if meta.Needs != "daemon" || meta.Client != "claude-code" {
+		t.Fatalf("delegate capture.json = %+v, want client claude-code needing a daemon", meta)
+	}
+	got, err := mcp.Replay(ctx, buildDelegate(), in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := mcp.CompareFrames(out, got); err != nil {
+		t.Errorf("the delegate answer changed since the real client accepted it: %v", err)
+	}
+}
+
+// buildDelegate is the production Server over the coretools delegate
+// registrations, dispatching to a stand-in daemon that dispatches one job.
+func buildDelegate() *mcp.Server {
+	daemon := rpc.NewRegistry()
+	dispatched := func(context.Context, json.RawMessage) (any, error) {
+		return map[string]string{"job_id": "j_test", "status": "dispatched"}, nil
+	}
+	daemon.Register("conductor.delegate", dispatched)
+	daemon.Register("conductor.delegate_wait", dispatched)
+	return mcp.NewServer(mcp.NewToolRegistry(noBuiltins, mcp.AllowAllFilter{}, coretools.Registrations(daemon)...))
+}
+
+// noBuiltins is a manifest source with no plugins: only the delegate tools.
+func noBuiltins() []plugin.BuiltinRegistration { return nil }

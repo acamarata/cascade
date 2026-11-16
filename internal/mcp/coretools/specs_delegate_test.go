@@ -1,6 +1,7 @@
 package coretools_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -195,18 +196,66 @@ func TestDelegateToolResponseShape(t *testing.T) {
 }
 
 // TestDelegateToolMatchesRealCCFixture replays the captured in.jsonl through
-// the delegate tool and asserts the output equals out.jsonl.
+// the delegate tool's production registration and asserts the tools/call
+// answer equals the last frame of out.jsonl. capture.json must mark the capture needs:daemon,
+// which is why ReplayAll leaves it to this test.
 func TestDelegateToolMatchesRealCCFixture(t *testing.T) {
-	inPath := filepath.Join("..", "testdata", "goldens", "claude-code", "delegate", "in.jsonl")
-	outPath := filepath.Join("..", "testdata", "goldens", "claude-code", "delegate", "out.jsonl")
-	inData, err := os.ReadFile(inPath)
-	if err != nil {
-		t.Fatalf("read in.jsonl: %v", err)
+	dir := filepath.Join("..", "testdata", "goldens", "claude-code", "delegate")
+	var meta struct {
+		Client string `json:"client"`
+		Needs  string `json:"needs"`
 	}
-	outData, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("read out.jsonl: %v", err)
+	if err := json.Unmarshal(readFixture(t, filepath.Join(dir, "capture.json")), &meta); err != nil {
+		t.Fatal(err)
 	}
-	_ = inData
-	_ = outData
+	if meta.Client != "claude-code" || meta.Needs != "daemon" {
+		t.Fatalf("capture.json = %+v, want client claude-code needing a daemon", meta)
+	}
+	dispatched := func(context.Context, json.RawMessage) (any, error) {
+		return map[string]string{"job_id": "j_test", "status": "dispatched"}, nil
+	}
+	srv := mcp.NewServer(mcp.NewToolRegistry(noPlugins, grantingFilter{coretools.CapabilityAgentsDelegate: true},
+		coretools.Registrations(delegateTable(dispatched))...))
+	var last *mcp.Response
+	for _, line := range bytes.Split(bytes.TrimSpace(readFixture(t, filepath.Join(dir, "in.jsonl"))), []byte("\n")) {
+		frame, perr := mcp.ParseFrame(line)
+		if perr != nil {
+			t.Fatalf("captured frame does not parse: %v", perr)
+		}
+		if resp := srv.Dispatch(context.Background(), frame); resp != nil {
+			last = resp
+		}
+	}
+	got, err := json.Marshal(last)
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorded := bytes.Split(bytes.TrimSpace(readFixture(t, filepath.Join(dir, "out.jsonl"))), []byte("\n"))
+	if want := recorded[len(recorded)-1]; canonical(t, got) != canonical(t, want) {
+		t.Errorf("delegate answer = %s, the capture recorded %s", got, want)
+	}
+}
+
+// readFixture reads one capture file.
+func readFixture(t *testing.T, path string) []byte {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// canonical re-encodes a JSON frame with sorted keys.
+func canonical(t *testing.T, raw []byte) string {
+	t.Helper()
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		t.Fatalf("%s: %v", raw, err)
+	}
+	out, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
 }
