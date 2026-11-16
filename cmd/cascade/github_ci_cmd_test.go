@@ -167,10 +167,10 @@ func TestGitHubCIMergeOnGreenReachesTheBridgeWithItsParsedFlags(t *testing.T) {
 // them on the L3 rung.
 func TestGitHubCICapabilitiesAreDistinctAndExternal(t *testing.T) {
 	caps := githubCICapabilities()
-	if len(caps) != 2 {
-		t.Fatalf("got %d capabilities, want 2", len(caps))
+	if len(caps) != 3 {
+		t.Fatalf("got %d capabilities, want 3", len(caps))
 	}
-	if caps[0].Name == caps[1].Name {
+	if caps[0].Name == caps[1].Name || caps[2].Name != ci.MirrorCapability {
 		t.Fatalf("both capabilities are named %q: an unattended merge must not be satisfied by a human-merge grant", caps[0].Name)
 	}
 	for _, c := range caps {

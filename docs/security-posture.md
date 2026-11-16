@@ -42,6 +42,8 @@ See also [inbox send authorization: the send authorizer and its two capabilities
 
 See also [receive gate: bound fields, failing runs and cross-repo rejection at the receiving repository](security-posture/receive-gate.md).
 
+See also [mirror push: one named remote, fast-forward only, off by default](security-posture/mirror-push.md).
+
 ## Doctor security checks
 
 `cascade doctor` reports six security checks. All are read-only: none selects

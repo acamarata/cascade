@@ -261,5 +261,10 @@ func githubCICapabilities() []policy.Capability {
 			Desc:          "merge a pull request UNATTENDED once its required checks are green",
 			DefaultPolicy: policy.ClassExternalSideEffect,
 		},
+		{
+			Name:          ci.MirrorCapability,
+			Desc:          "push an accepted branch, fast-forward only, to the configured [ci].mirror_remote",
+			DefaultPolicy: policy.ClassExternalSideEffect,
+		},
 	}
 }

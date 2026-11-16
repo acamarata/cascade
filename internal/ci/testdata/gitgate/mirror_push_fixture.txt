@@ -1,0 +1,8 @@
+# Provenance: captured from a real fast-forward push to a local bare repository
+# with git 2.56.0 on 2026-11-15; porcelain output verbatim, object ids replaced.
+# The argv line is the shape MirrorPushArgv must produce.
+argv: git push --porcelain -- REMOTE TIP:refs/heads/BRANCH
+porcelain:
+To ../r.git
+ 	<sha>:refs/heads/main	<sha>..<sha>
+Done

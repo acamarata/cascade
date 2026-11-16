@@ -40,6 +40,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/acamarata/cascade/internal/ci"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/internal/plugins"
 	"github.com/acamarata/cascade/internal/secrets"
@@ -264,5 +265,19 @@ func TestRedTeamNoVaultInJWKSRequest(t *testing.T) {
 	}
 	if strings.Contains(string(out), redTeamSecret) {
 		t.Fatalf("vault value leaked through ci-oidc-jwks egress: %q", out)
+	}
+}
+
+// TestRedTeamNoVaultInMirrorPush: the mirror push argv and environment carry
+// no vaulted value, and the class refuses to carry one while shipped off.
+func TestRedTeamNoVaultInMirrorPush(t *testing.T) {
+	argv := strings.Join(ci.MirrorPushArgv("ssh://git@mirror.example.org/x.git", strings.Repeat("a", 40), "main"), " ")
+	env := strings.Join(ci.MirrorPushEnv([]string{"PATH=/bin", "HOME=/h", "CASCADE_TOKEN=" + redTeamSecret, "GH_TOKEN=" + redTeamSecret}), " ")
+	if strings.Contains(argv, redTeamSecret) || strings.Contains(env, redTeamSecret) {
+		t.Fatalf("a vaulted value reached the push: argv %q env %q", argv, env)
+	}
+	out, err := redTeamEngine(t).InterceptClass(context.Background(), egress.EgressClassCIMirrorPush, egress.TierPublic, []byte(argv+redTeamSecret))
+	if !errors.Is(err, egress.ErrClassDisabled) || out != nil {
+		t.Fatalf("ci-mirror-push = %v, %d bytes; want ErrClassDisabled and no output", err, len(out))
 	}
 }

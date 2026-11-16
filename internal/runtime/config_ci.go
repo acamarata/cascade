@@ -1,23 +1,10 @@
-// Purpose: the `[ci.policy]` and `[ci.local]` table parsers behind Load
-// (config.go), per P1-E25-W5-S51-T5's task 1 (08-INIT-CONFIG-SPEC.md §3
-// gains these two rows, R-21.267) — split out as its own sibling file
-// following config_widget.go's/config_economics.go's established remedy
-// (R-14.117) rather than growing config.go past its 300-line cap.
-//
-// FILES_SCOPE DEVIATION (recorded, same reasoning as config_fleet.go's
-// and config_economics.go's notes): the contract named config.go as the
-// registration point, but every section in this package is its own sibling
-// file wired through config_sections.go and config.go, which is the
-// registration convention R-21.267 describes under Art.10.3's 300-line cap.
-//
+// Purpose: the `[ci.policy]`, `[ci.local]` and `[ci].mirror_remote` parsers
+// behind Load, a sibling file so config.go stays under its 300-line cap.
 // Inputs: the decoded generic config tree (env overrides already applied).
-// Outputs: a ciPolicySection / ciLocalSection, or a typed *ConfigError for
-// an unrecognised key or a malformed value.
+// Outputs: typed sections, or a *ConfigError for an unrecognised key or a
+// malformed value.
 // Constraints: fail-closed on a malformed "owner/repo" pattern or a blank
-// command string (06 §5.20) — never silently drop a bad entry. No numeric
-// default is invented for timeout_seconds beyond the one this file itself
-// documents (defaultCITimeoutSeconds), matching loggingRotation's R-14.107
-// discipline of naming every default explicitly.
+// command string; never silently drop a bad entry.
 // SPORT: internal.runtime.parseCIPolicySection/ADDED,
 //
 //	internal.runtime.parseCILocalSection/ADDED (P1-E25-W5-S51-T5),
@@ -30,36 +17,28 @@ package runtime
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"path"
 	"strings"
 )
 
-// ciPolicySection is the `[ci.policy]` table's typed view: the
-// never-pay routing policy's only configurable input, a list of
-// "owner/repo" patterns naming private repositories (full_desc's
-// `[ci.policy.repos.private]`). There is deliberately no `allow_paid`
-// or similar bypass field — R-14.77 is enforced by this type's shape,
-// not by a flag a caller could set to defeat it.
+// ciPolicySection is the `[ci.policy]` table's typed view: a list of
+// "owner/repo" patterns naming private repositories. There is deliberately
+// no `allow_paid` or similar bypass field.
 type ciPolicySection struct {
 	// PrivateRepos are "owner/repo" patterns; a repo matching one of
 	// these routes to the local gate rather than GitHub Actions.
 	PrivateRepos []string
 }
 
-// ciLocalSection is the `[ci.local]` table's typed view: the local CI
-// runner's step commands and per-step timeout. Lint/Test/Build are nil
-// when unset in config.toml -- internal/ci's own runner_config.go decides
-// the repo-type-derived default commands; this file only type-checks
-// what config.toml actually declares.
+// ciLocalSection is the `[ci.local]` table's typed view. Lint/Test/Build are
+// nil when unset; internal/ci decides the defaults.
 type ciLocalSection struct {
 	Lint  []string
 	Test  []string
 	Build []string
-	// EnvKeys are the extra environment-variable NAMES the operator wants
-	// passed through to every step, on top of internal/ci's fixed
-	// allowlist. Names, never values: a step's environment is BUILT from an
-	// allowlist rather than inherited, so this key widens that list; it
-	// never introduces a secret of its own into config.toml.
+	// EnvKeys are extra environment-variable NAMES passed to every step on
+	// top of internal/ci's fixed allowlist. Names, never values.
 	EnvKeys        []string
 	TimeoutSeconds int
 }
@@ -97,9 +76,7 @@ func parseCIPolicySection(tree map[string]interface{}) (ciPolicySection, error) 
 	return ciPolicySection{PrivateRepos: patterns}, nil
 }
 
-// parsePrivateRepoPatterns type-checks [ci.policy.repos]'s "private" array,
-// factored out of parseCIPolicySection to keep it under Art.10.3's 50-line
-// funlen cap.
+// parsePrivateRepoPatterns type-checks [ci.policy.repos]'s "private" array.
 func parsePrivateRepoPatterns(reposTree map[string]interface{}) ([]string, error) {
 	for k := range reposTree {
 		if k != "private" {
@@ -134,17 +111,9 @@ func parsePrivateRepoPatterns(reposTree map[string]interface{}) ([]string, error
 	return patterns, nil
 }
 
-// validateRepoPattern checks one [ci.policy.repos.private] entry at LOAD
-// time, so a typo is a startup error naming the key rather than a silent
-// routing hole later.
-//
-// The entries are GLOB patterns over "owner/repo" (path.Match semantics),
-// not exact strings: "acamarata/*" is meant to cover every repository
-// under one owner. path.Match reports ErrBadPattern from the pattern
-// alone, so the probe subject below is arbitrary. The same semantics are
-// applied at match time by the resolver in plugins/github/cipolicy --
-// deliberately the same standard-library call on both sides rather than a
-// second hand-written matcher that could disagree with this check.
+// validateRepoPattern checks one [ci.policy.repos.private] entry at load
+// time. Entries are path.Match globs over "owner/repo"; the resolver in
+// plugins/github/cipolicy uses the same call at match time.
 func validateRepoPattern(pattern string) error {
 	trimmed := strings.TrimSpace(pattern)
 	if trimmed == "" || !strings.Contains(trimmed, "/") {
@@ -191,9 +160,8 @@ func parseCILocalSection(tree map[string]interface{}) (ciLocalSection, error) {
 	return sec, nil
 }
 
-// ciCommandList type-checks one [ci.local] command-list key (lint/test/
-// build): an array of non-blank command strings, or absent (nil, "use the
-// repo-type default").
+// ciCommandList type-checks one [ci.local] command-list key: non-blank
+// command strings, or absent (nil).
 func ciCommandList(localTree map[string]interface{}, key string) ([]string, error) {
 	raw, present := localTree[key]
 	if !present {
@@ -214,10 +182,8 @@ func ciCommandList(localTree map[string]interface{}, key string) ([]string, erro
 	return cmds, nil
 }
 
-// ciEnvKeys type-checks [ci.local] env: an array of environment-variable
-// NAMES to pass through to every step. A name is rejected if it is blank
-// or carries an "=" -- that would be a NAME=VALUE pair, and this key
-// deliberately cannot set a value, only widen the pass-through allowlist.
+// ciEnvKeys type-checks [ci.local] env: variable NAMES only; a blank name or
+// one carrying "=" is rejected, since this key never sets a value.
 func ciEnvKeys(localTree map[string]interface{}) ([]string, error) {
 	raw, present := localTree["env"]
 	if !present {
@@ -241,17 +207,10 @@ func ciEnvKeys(localTree map[string]interface{}) ([]string, error) {
 	return keys, nil
 }
 
-// parseCIAffectedCmdField type-checks the `[ci].affected_cmd` key
-// (08-INIT-CONFIG-SPEC.md §3's `[ci]` row, AMD-20260922/F7-7 amendment,
-// R-21.173) -- a single top-level string sibling of `ci.watch`
-// (config_ci_watch.go) and `[ci.policy]`/`[ci.local]` above, not a
-// nested table. Absent or blank means "not configured": internal/ci's
-// own non-Go-stack Affected dispatch (affected.go's affectedTargets)
-// then falls back to the conservative TargetAll for any stack without a
-// configured command. A present value is kept VERBATIM -- no shell
-// tokenizing/parsing happens here, matching [ci.local]'s own lint/test/
-// build command strings; internal/ci/affected_cmd.go is the one place
-// that ever passes it to a shell, as a single command string.
+// parseCIAffectedCmdField type-checks the top-level `[ci].affected_cmd`
+// string. Absent or blank means "not configured" (internal/ci then falls
+// back to TargetAll). A present value is kept verbatim; only
+// internal/ci/affected_cmd.go passes it to a shell.
 func parseCIAffectedCmdField(tree map[string]interface{}) (string, error) {
 	ciTree, ok := tree["ci"].(map[string]interface{})
 	if !ok {
@@ -287,9 +246,7 @@ func parseCIToolchainVersions(tree map[string]interface{}) ([]string, error) {
 	return out, nil
 }
 
-// nestedTable reads tree[a][b] as a map, tolerating either level being
-// absent (ok=false, never an error -- an absent table means "use every
-// default", exactly like widgetSection's own top-level absence handling).
+// nestedTable reads tree[a][b] as a map; either level absent is ok=false.
 func nestedTable(tree map[string]interface{}, a, b string) (map[string]interface{}, bool) {
 	outer, ok := tree[a].(map[string]interface{})
 	if !ok {
@@ -297,4 +254,46 @@ func nestedTable(tree map[string]interface{}, a, b string) (map[string]interface
 	}
 	inner, ok := outer[b].(map[string]interface{})
 	return inner, ok
+}
+
+// CIMirrorRemote is [ci].mirror_remote, the one remote an accepted branch is
+// mirrored to; empty (default) is off. It must be a URL or user@host:path
+// address with no password or token.
+func (c *Config) CIMirrorRemote() (string, error) {
+	ciTree, _ := c.rawTree["ci"].(map[string]interface{})
+	raw, present := ciTree["mirror_remote"]
+	s, ok := raw.(string)
+	if present && !ok {
+		return "", &ConfigError{Field: "ci.mirror_remote", Reason: "must be a string"}
+	}
+	if s = strings.TrimSpace(s); s == "" {
+		return "", nil
+	}
+	if _, err := MirrorRemoteHost(s); err != nil {
+		return "", &ConfigError{Field: "ci.mirror_remote", Reason: err.Error()}
+	}
+	return s, nil
+}
+
+// MirrorRemoteHost returns the host of a mirror remote address and refuses
+// one with a leading dash, whitespace, an embedded password or no host.
+func MirrorRemoteHost(remote string) (string, error) {
+	if remote == "" || strings.HasPrefix(remote, "-") || strings.ContainsAny(remote, " \t\r\n") {
+		return "", errors.New("must be a git URL or user@host:path address")
+	}
+	if strings.Contains(remote, "://") {
+		u, err := url.Parse(remote)
+		if err != nil || u.Hostname() == "" {
+			return "", errors.New("must name a host")
+		}
+		if _, hasPw := u.User.Password(); hasPw {
+			return "", errors.New("must not embed a password or token; use the git credential helper")
+		}
+		return strings.ToLower(u.Hostname()), nil
+	}
+	host, _, found := strings.Cut(remote[strings.LastIndex(remote, "@")+1:], ":")
+	if !found || host == "" || strings.Contains(host, "/") {
+		return "", errors.New("must be a git URL or user@host:path address")
+	}
+	return strings.ToLower(host), nil
 }

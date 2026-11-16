@@ -234,3 +234,26 @@ func TestConfigCIToolchainVersions(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigCIMirrorRemote: [ci].mirror_remote is empty by default, parses a
+// URL or scp address, and refuses a non-string, a password and a bare name.
+func TestConfigCIMirrorRemote(t *testing.T) {
+	cfg, err := loadCITestConfig(t, "")
+	if got, gerr := cfg.CIMirrorRemote(); err != nil || gerr != nil || got != "" {
+		t.Fatalf("default: %q, %v, %v; want empty", got, err, gerr)
+	}
+	for in, host := range map[string]string{"ssh://git@Mirror.example.org/x.git": "mirror.example.org", "git@host.example:team/x.git": "host.example"} {
+		cfg, err = loadCITestConfig(t, "[ci]\nmirror_remote = \""+in+"\"\n")
+		got, gerr := cfg.CIMirrorRemote()
+		h, herr := MirrorRemoteHost(got)
+		if err != nil || gerr != nil || got != in || herr != nil || h != host {
+			t.Fatalf("%s: %q %q %v %v %v; want host %q", in, got, h, err, gerr, herr, host)
+		}
+	}
+	for _, bad := range []string{"mirror_remote = 5", "mirror_remote = \"origin\"", "mirror_remote = \"https://u:tok@h.example/x\"", "mirror_remote = \"-oProxy=x\""} {
+		cfg, err = loadCITestConfig(t, "[ci]\n"+bad+"\n")
+		if _, gerr := cfg.CIMirrorRemote(); err != nil || gerr == nil || !strings.Contains(gerr.Error(), "ci.mirror_remote") {
+			t.Fatalf("%s: %v, %v; want a ci.mirror_remote config error", bad, err, gerr)
+		}
+	}
+}

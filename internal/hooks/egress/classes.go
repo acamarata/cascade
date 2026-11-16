@@ -210,6 +210,12 @@ const (
 	// outbound requests from the external executor transit this class.
 	// AllowRestricted is NOT set and AllowedTiers admits only {public}.
 	EgressClassExternalExecutor EgressClass = "external-executor"
+	// EgressClassCIMirrorPush is the fast-forward push of an accepted branch
+	// to the one host [ci].mirror_remote names. It ships DISABLED: it is
+	// enabled at run time only when that key is set AND the ci.mirror
+	// capability is granted, and the caller refuses any other host.
+	// AllowRestricted is NOT set and no vaulted value belongs in the push.
+	EgressClassCIMirrorPush EgressClass = "ci-mirror-push"
 )
 
 // defaultClasses is the registration table. It is a slice of pairs rather
@@ -278,6 +284,7 @@ var defaultClasses = []struct {
 		AllowedTiers:    []SensitivityTier{TierPublic},
 		Owner:           "P1-NODE-09",
 	}},
+	{EgressClassCIMirrorPush, InterceptConfig{Enabled: false, AllowRestricted: false, Owner: "P1-CI-16"}},
 }
 
 // EgressClassProviderUsage is the gateway quota poll (P1-GWY-04): every GET
