@@ -104,7 +104,7 @@ func openUnderDir(dir, name string, flag int, perm os.FileMode, uid int, private
 	if err != nil || !fi.IsDir() || !ownedBy(fi, uid) || (private && fi.Mode().Perm()&0o077 != 0) {
 		return nil, errDirUntrusted
 	}
-	fd, err := retryEINTR(func() (int, error) {
+	fd, err := retryCreate(flag, func() (int, error) {
 		return unix.Openat(int(d.Fd()), name, flag|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, uint32(perm.Perm()))
 	})
 	if err != nil {
@@ -124,6 +124,23 @@ func retryEINTR(open func() (int, error)) (int, error) {
 	for {
 		fd, err := open()
 		if !errors.Is(err, unix.EINTR) {
+			return fd, err
+		}
+	}
+}
+
+// createENOENTRetries bounds the retries of a spurious ENOENT from a
+// concurrent first create.
+const createENOENTRetries = 3
+
+// retryCreate is retryEINTR plus, for an open that creates, a bounded retry of
+// ENOENT. With O_CREAT on a directory that is still open, ENOENT can only come
+// from another process creating the same name at that instant (seen under
+// load with sixteen relays racing to create the sequence file).
+func retryCreate(flag int, open func() (int, error)) (int, error) {
+	for i := 0; ; i++ {
+		fd, err := retryEINTR(open)
+		if flag&unix.O_CREAT == 0 || !errors.Is(err, unix.ENOENT) || i >= createENOENTRetries {
 			return fd, err
 		}
 	}
