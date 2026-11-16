@@ -44,3 +44,77 @@ type StandingGrant struct {
 	// Revoked indicates whether the grant has been revoked.
 	Revoked bool
 }
+
+// Session represents an authentication session.
+type Session struct {
+	// IsOwner indicates whether this session belongs to an owner.
+	IsOwner bool
+	// OwnerID is the identifier of the owner if this is an owner session.
+	OwnerID string
+}
+
+// CreateGrant creates a new standing grant for an owner session.
+// It verifies that the provided session belongs to an owner; if not, it returns
+// nil and ErrNotOwnerSession. On success, it returns a StandingGrant populated
+// with the given op lists, OwnerID from the session, ExpiresAt set to
+// clock().Add(DefaultDuration), and Revoked set to false.
+func CreateGrant(ownerSession Session, laneOps, grantOps, jobsOps []string, clock func() time.Time) (*StandingGrant, error) {
+	if !ownerSession.IsOwner {
+		return nil, ErrNotOwnerSession
+	}
+
+	return &StandingGrant{
+		OwnerID:   ownerSession.OwnerID,
+		LaneOps:   append([]string(nil), laneOps...),
+		GrantOps:  append([]string(nil), grantOps...),
+		JobsOps:   append([]string(nil), jobsOps...),
+		ExpiresAt: clock().Add(DefaultDuration),
+		Revoked:   false,
+	}, nil
+}
+
+// Validate checks if the standing grant is valid for the given request kind at the specified time.
+// It returns ErrGrantRevoked if the grant has been revoked, and ErrGrantExpired if the grant has expired.
+// If the grant is valid, it confirms the requested kind is covered by the grant operations.
+func (g *StandingGrant) Validate(kind RequestKind, now time.Time) error {
+	if g.Revoked {
+		return ErrGrantRevoked
+	}
+	if now.After(g.ExpiresAt) {
+		return ErrGrantExpired
+	}
+
+	switch kind {
+	case KindLane:
+		if len(g.LaneOps) == 0 {
+			return errors.New("lane operations not covered")
+		}
+	case KindGrant:
+		if len(g.GrantOps) == 0 {
+			return errors.New("grant operations not covered")
+		}
+	case KindJobs:
+		if len(g.JobsOps) == 0 {
+			return errors.New("jobs operations not covered")
+		}
+	default:
+		return errors.New("unknown request kind")
+	}
+
+	return nil
+}
+
+// Revoke immediately revokes the standing grant, preventing any further renewals.
+func (g *StandingGrant) Revoke() {
+	g.Revoked = true
+}
+
+// Renew extends the standing grant's expiration time by the given duration.
+// It returns ErrGrantRevoked if the grant has already been revoked.
+func (g *StandingGrant) Renew(duration time.Duration) error {
+	if g.Revoked {
+		return ErrGrantRevoked
+	}
+	g.ExpiresAt = g.ExpiresAt.Add(duration)
+	return nil
+}
