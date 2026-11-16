@@ -2,10 +2,48 @@
 
 The hooks engine runs configured actions when a matching event lands on
 the daemon's event bus (`internal/events`), and records one audit entry
-for every attempt. This page describes the engine library. The daemon
-composition (constructing the dispatcher, wiring the real plugin
-dispatcher, router and rehydration seam) is separate work; until it lands
-nothing in the shipped binary calls the engine.
+for every attempt. This page describes the engine library and its
+composition into the daemon.
+
+## Composition
+
+`cmd/cascade/wire_hooks.go` registers one daemon subsystem, `hooks`
+(phase supervised, order 40), through the composition-root registration.
+It builds the one `Dispatcher` from the admitted `[hooks]` section
+(`Reloader.Current`), never from the file on disk, and it:
+
+- builds the runner table from the registrations in
+  `cmd/cascade/hooks_runners.go`: `plugin-call` over the installed-plugin
+  registry (`LaunchInstalled` and its `TrustedHandle` in `internal/plugins`) and
+  `agent-note` over the memory store. Shell is never registered, so a
+  `[hooks]` entry with `action_type = "shell"` is refused at load and the
+  manifest names the refusal;
+- binds rehydration with `BoundRehydrate` over
+  `secrets.NewRehydrator` on the framework broker. `cmd/cascade/hooks_rehydrate.go`
+  is the only production file that calls `RehydrateOnly`;
+- routes every action through the policy router as `routing.OriginHook`,
+  under the capabilities `hooks.plugin_call` and `hooks.agent_note`;
+- puts `rpc.OriginTool` on every runner context. A witness the `Run`
+  context held is not readable below it, so a hook can never reach a
+  verified-elevation verb;
+- subscribes to `config.reload.accepted` (cursor `hooks-reload`) and swaps
+  the registry through `ReloadWatch`;
+- raises an attention item when a hook edit on disk is refused for want of
+  `config.accept_loosening` (subsystem `hooks-attention`);
+- serves `hooks.list` and `hooks.fires`, owner-only.
+
+A build error leaves the subsystem Failed in the manifest and both verbs
+answer `KindUnavailable`; every other subsystem still starts.
+
+### Effect records
+
+Each plugin-call delivery is one effect key (`hook:` plus the hook id and
+event sequence). The runner writes the intent before the call and the
+confirmation after it. A redelivered event finds the record and is refused
+as a duplicate delivery, so the plugin runs once. If the daemon dies
+between the call and the confirmation, the next start marks the effect
+unknown-outcome and does not repeat the call. The `params_hash` on the
+audit row is the delivery digest, never a hash of rehydrated params.
 
 ## Config: `[[hooks]]`
 
@@ -217,9 +255,18 @@ Limits:
 
 ## RPC surface
 
-`Dispatcher.Hooks()` (configured hooks, params verbatim: an RPC exposing
-them decides what to redact), `Fires()` (the newest 100, oldest first, no
-params) and `Stats()` (`Registered`, `LastFire`, `BudgetRefusals`).
+Both verbs are owner-only and take no params.
+
+| Verb | Reply |
+|---|---|
+| `hooks.list` | `{hooks: [{id, namespace, trigger, action_type, params_hash, param_keys}], stats: {registered, last_fire, budget_refusals}}`. `last_fire` is RFC 3339 or null. Param values are never returned. |
+| `hooks.fires` | `{fires: [...]}`: the newest 100 fire records, oldest first (`hook_id`, `result_code`, `params_hash`, `err_msg` and timing). No params. |
+
+The engine side is `Dispatcher.Hooks()`, `Fires()` and `Stats()`. An error
+message that echoes an input, a vault value or its tagged form is redacted
+before it reaches either verb, the stored events or the daemon log. See
+[hook rehydration](../security-posture/hook-rehydration.md) for the limit
+on plugin stderr.
 
 ## Error kinds
 

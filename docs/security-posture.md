@@ -18,6 +18,8 @@ See also [controller designation: one controller, never by default](security-pos
 
 See also [process-plugin trust: granted only by a witnessed install](security-posture/plugin-trust.md).
 
+See also [hook rehydration: vault tags resolved only at dispatch](security-posture/hook-rehydration.md).
+
 See also [caller principals: who is calling the daemon, and what each caller may reach](security-posture/caller-principal.md).
 
 See also [agent owner reach: what stops an agent session acting as the owner, and what does not](security-posture/agent-owner-reach.md).

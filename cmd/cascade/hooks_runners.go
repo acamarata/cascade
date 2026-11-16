@@ -115,13 +115,15 @@ func (r toolOriginRunner) RunAction(ctx context.Context, fire hooks.Fire, params
 	return r.inner.RunAction(rpc.WithOrigin(ctx, rpc.OriginTool), fire, params)
 }
 
-// buildPluginCallRunner runs plugin calls over the daemon's shared effect log.
+// buildPluginCallRunner runs plugin calls over the daemon's shared effect log,
+// through the library plugin-call runner with hookPluginRunner as its
+// PluginDispatcher.
 func buildPluginCallRunner(w *daemonWiring) (hooks.ActionRunner, error) {
 	effects, err := openEffectLog(w.Store, w.Clock, nil, w.Paths)
 	if err != nil {
 		return nil, err
 	}
-	return hookPluginRunner{effects: effects, launch: plugins.InstalledHandleProvider()}, nil
+	return hooks.PluginCallRunner(hookPluginRunner{effects: effects, launch: plugins.InstalledHandleProvider()}), nil
 }
 
 // hookDeliveryDigest is the sha256 hex of one delivery's identity.
@@ -136,16 +138,16 @@ func hookEffectKey(fire hooks.Fire) string {
 	return hookEffectPrefix + hookDeliveryDigest(fire)[:32]
 }
 
-// hookPluginRunner is the plugin-call runner.
+// hookPluginRunner is the plugin-call runner's hooks.PluginDispatcher.
 type hookPluginRunner struct {
 	effects audit.EffectWriter
 	launch  plugins.HandleProvider
 }
 
-// RunAction begins the delivery's effect, calls the plugin once and writes
-// the terminal record. A call whose outcome is unknown keeps its intent, and
-// recoverHookEffects marks it.
-func (r hookPluginRunner) RunAction(ctx context.Context, fire hooks.Fire, params map[string]string) error {
+// DispatchPluginCall begins the delivery's effect, calls the plugin once and
+// writes the terminal record. A call whose outcome is unknown keeps its
+// intent, and recoverHookEffects marks it.
+func (r hookPluginRunner) DispatchPluginCall(ctx context.Context, fire hooks.Fire, params map[string]string) error {
 	id, tool := params[hooks.PluginParamName], params[hooks.PluginToolParam]
 	input := []byte(params[hookInputParam])
 	if len(input) == 0 {

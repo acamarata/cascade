@@ -59,7 +59,7 @@ const (
 type pluginCallRunner struct{ pd PluginDispatcher }
 
 func (r pluginCallRunner) RunAction(ctx context.Context, fire Fire, params map[string]string) error {
-	return r.pd.DispatchPluginCall(ctx, fire.Hook.ID, params)
+	return r.pd.DispatchPluginCall(ctx, fire, params)
 }
 
 // PluginCallRunner returns the plugin-call runner over pd, or nil for a nil

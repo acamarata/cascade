@@ -179,20 +179,31 @@ restart). Each `[[hooks]]` array-of-tables entry maps to
 ```toml
 [[hooks]]
 id = "notify-on-register"       # optional, see below
+namespace = "daemon"            # required: the bus namespace to listen on
 trigger = "plugin.registered"   # exact-match against an event bus Kind
-action_type = "plugin-call"     # "plugin-call" | "agent-note" ONLY at W1
+action_type = "plugin-call"     # "plugin-call" | "agent-note" in P1
 [hooks.action_params]
 plugin = "notifier"
+tool = "send"
 ```
 
 | Field | Type | Notes |
 |---|---|---|
 | `id` | string | Stable hook identifier. If omitted, derived deterministically from `trigger` + `action_type` + a hash of `action_params`, so two config files declaring the same hook get the same id across a daemon restart without hand-assignment. |
+| `namespace` | string | Required. The bus namespace the hook listens on, matching `^[a-z][a-z0-9._-]{0,63}$`. The audit namespace `hooks` is refused. |
 | `trigger` | string | The event bus `Kind` string this hook fires on (exact match, no wildcard syntax at W1). |
 | `action_type` | string | `plugin-call` invokes a plugin via the composition root's `PluginDispatcher` (wired to C/S-05.T7's plugin registry); `agent-note` writes a structured note via `NoteWriter` (wired once G/S-13's journal/memory domain ships). |
 | `action_params` | table of string→string | Opaque to the engine: interpreted by whichever `PluginDispatcher`/`NoteWriter` implementation is wired in. |
 
-**W1 action-type restriction (security ruling, 04 §Epic C S-05.T1):**
+**Vault bindings need accept-loosening.** An `action_params` value may
+carry a vault tag such as `<apikey>NAME</apikey>`; `config.toml` holds the
+tag, never the value. A new hook, a changed hook, and every new vault
+binding are loosenings: they take effect only through
+`config.accept_loosening` over that exact file. Until then the daemon runs
+the admitted hooks and a refused edit raises an attention item. Removing a
+hook applies at once. See `docs/security-posture/hook-rehydration.md`.
+
+**P1 action-type restriction (security ruling, 04 §Epic C S-05.T1):**
 `shell` and any action type other than `plugin-call`/`agent-note` are
 refused, at both config load/registration time and again, independently,
 at dispatch time (defense-in-depth), with a `policy-denied` error. Shell

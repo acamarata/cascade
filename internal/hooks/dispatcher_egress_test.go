@@ -24,7 +24,7 @@ type recordingDispatcher struct {
 	params chan map[string]string
 }
 
-func (r *recordingDispatcher) DispatchPluginCall(_ context.Context, _ string, params map[string]string) error {
+func (r *recordingDispatcher) DispatchPluginCall(_ context.Context, _ Fire, params map[string]string) error {
 	select {
 	case r.params <- params:
 	default:

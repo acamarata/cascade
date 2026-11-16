@@ -28,10 +28,10 @@ type recordingSeams struct {
 	plugin, notes []seamCall
 }
 
-func (s *recordingSeams) DispatchPluginCall(_ context.Context, hookID string, params map[string]string) error {
+func (s *recordingSeams) DispatchPluginCall(_ context.Context, fire Fire, params map[string]string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.plugin = append(s.plugin, seamCall{hookID, cloneParams(params)})
+	s.plugin = append(s.plugin, seamCall{fire.Hook.ID, cloneParams(params)})
 	return nil
 }
 

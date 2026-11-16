@@ -199,7 +199,7 @@ func TestHookPluginCallCrashLeavesUnknownOutcome(t *testing.T) {
 		t.Cleanup(plugins.SetExecutableDirForTest(os.Getenv(hookChildExeEnv)))
 		useHookLaunchEnv(t, store, log).onCall = func() { hookMust(t, os.WriteFile(path+".calls", []byte("x"), 0o600)) }
 		r := hookPluginRunner{effects: exitOnConfirm{log}, launch: plugins.InstalledHandleProvider()}
-		t.Fatalf("the child survived its crash point: %v", r.RunAction(ctx, fire, hookTestParams))
+		t.Fatalf("the child survived its crash point: %v", r.DispatchPluginCall(ctx, fire, hookTestParams))
 	}
 	f := newHookFixture(t)
 	rec, _, err := plugins.LoadMetadata(ctx, f.daemon.Store, hookTestPlugin)

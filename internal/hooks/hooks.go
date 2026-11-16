@@ -157,15 +157,17 @@ type HookFire struct {
 // PluginDispatcher is the seam PluginCallRunner calls. The composition
 // root wires the concrete implementation over the plugin registry; this
 // package depends on the interface only, so it never imports
-// internal/plugins. params are the rehydrated params for this fire.
+// internal/plugins. fire is the whole dispatch identity (hook, namespace,
+// event seq and causal chain; Hook.ActionParams is always nil) and params
+// are the rehydrated params for this fire.
 //
 // Idempotency: internal/events delivers at least once, so one logical
 // event may reach DispatchPluginCall twice. An implementation whose call
-// is not naturally idempotent keys its own guard on the Fire identity the
-// runner receives (hook id, namespace, event seq).
+// is not naturally idempotent keys its own guard on fire's identity (hook
+// id, namespace, event seq), which is why the seam takes the whole Fire.
 type PluginDispatcher interface {
-	// DispatchPluginCall invokes the plugin action a hook configures.
-	DispatchPluginCall(ctx context.Context, hookID string, params map[string]string) error
+	// DispatchPluginCall invokes the plugin action fire's hook configures.
+	DispatchPluginCall(ctx context.Context, fire Fire, params map[string]string) error
 }
 
 // NoteWriter is the seam AgentNoteRunner calls. No production
