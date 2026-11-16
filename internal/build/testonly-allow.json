@@ -968,13 +968,6 @@
     "symbol": "internal/ci.RequestNodeSignature"
   },
   {
-    "caller_site": "cmd/cascade/wire_node_channel.go",
-    "expected_caller": "cmd/cascade/wire_node_channel.go, which P1-NODE-18k wires the node channel into the controller daemon; retire this entry once that file calls NewSSHDialerFromSigner",
-    "reason": "P1-NODE-18b ships NewSSHDialerFromSigner with its tests; its first production caller is cmd/cascade/wire_node_channel.go from P1-NODE-18k.",
-    "retire_ticket": "P1-NODE-18",
-    "symbol": "internal/nodes.NewSSHDialerFromSigner"
-  },
-  {
     "caller_site": "internal/fleet/economics/refresh_grant.go",
     "expected_caller": "internal/fleet/economics/refresh_grant.go, which P1-TOP-13d adds RefreshGrantOnce, the custody-gated grant path; retire this entry once that file calls NewJSONGrantPoster",
     "reason": "P1-TOP-13a ships NewJSONGrantPoster with its tests; its first production caller is internal/fleet/economics/refresh_grant.go from P1-TOP-13d.",
@@ -1326,14 +1319,6 @@
     "symbol": "internal/nodes.HostKeyFingerprintFromFile"
   },
   {
-    "added_by_ticket": "P1-NODE-16a",
-    "caller_site": "internal/nodes/designation_bootstrap.go",
-    "expected_caller": "internal/nodes/designation_bootstrap.go, which P1-NODE-16ab adds; retire this entry once that file calls Handover",
-    "reason": "P1-NODE-16aa ships the designation type, file backend and handover with tests; the bootstrap that opens the backend and designates is P1-NODE-16ab, which depends on it.",
-    "retire_ticket": "P1-NODE-16",
-    "symbol": "internal/nodes.Handover"
-  },
-  {
     "added_by_ticket": "P1-TOP-09c",
     "caller_site": "internal/daemon/fleet_candidates.go",
     "expected_caller": "internal/daemon/fleet_candidates.go, which P1-TOP-09e adds; retire this entry once that file calls NewRankSelector",
@@ -1372,14 +1357,6 @@
     "reason": "The sealed registry takes extra utility terms before first use; the learned-input subsystem of P1-TOP-09f registers them.",
     "retire_ticket": "P1-TOP-09f",
     "symbol": "internal/fleet/economics.RegisterTerm"
-  },
-  {
-    "added_by_ticket": "P1-NODE-18e",
-    "caller_site": "cmd/cascade/wire_node_channel.go",
-    "expected_caller": "the daemon's node channel wiring registers the dispatch journal on the node-facing registry",
-    "reason": "P1-NODE-18e unmounts the journal from the owner registry; the node channel wiring is P1-NODE-18k",
-    "retire_ticket": "P1-NODE-18k",
-    "symbol": "internal/daemon.RegisterNodeDispatchJournal"
   },
   {
     "added_by_ticket": "P1-AGT-10a",
@@ -1446,14 +1423,6 @@
     "symbol": "internal/conductor.WithRanker"
   },
   {
-    "added_by_ticket": "P1-NODE-18f",
-    "caller_site": "cmd/cascade/wire_node_channel.go",
-    "expected_caller": "the daemon's node-channel wiring builds the node-facing registry with NewNodeFacing and serves node RPCs on it",
-    "reason": "P1-NODE-18f builds the node-only registry and its handlers; the daemon mounts it in the node-channel wiring",
-    "retire_ticket": "P1-NODE-18k",
-    "symbol": "internal/nodes.NewNodeFacing"
-  },
-  {
     "added_by_ticket": "P1-TOP-04d",
     "caller_site": "internal/conductor/fanout.go",
     "expected_caller": "none planned: the fan-out WithPermitFn seam in internal/conductor/fanout.go is now Executor.LegPermit, so P1-TOP-04 deletes internal/conductor/leg_budget.go (or a plan ruling names a new production caller) before it closes; retire this entry then",
@@ -1478,11 +1447,11 @@
     "symbol": "internal/fleet/economics.RefreshGrantOnce"
   },
   {
-    "added_by_ticket": "P1-HRN-14a",
-    "caller_site": "internal/mcp/initialize.go",
-    "expected_caller": "internal/mcp/initialize.go, the initialize negotiation that answers a client offering an unsupported revision with a member of SupportedProtocolVersions; retire this entry once that file reads it",
-    "reason": "P1-HRN-14a declares the supported version set as part of the replay contract (contract:mcp-wire-protocol) and asserts it in the replay test, but the negotiation that reads it in initialize.go is P1-HRN-14b's change.",
-    "retire_ticket": "P1-HRN-14b",
-    "symbol": "internal/mcp.SupportedProtocolVersions"
+    "added_by_ticket": "P1-NODE-16a",
+    "caller_site": "cmd/cascade/controller_handover.go",
+    "expected_caller": "cmd/cascade/controller_handover.go (P2-NAHB-15)",
+    "reason": "operator handover is P2 per ADR-0001 §5; P1 ships the API only",
+    "retire_ticket": "P2-NAHB-15",
+    "symbol": "internal/nodes.Handover"
   }
 ]
