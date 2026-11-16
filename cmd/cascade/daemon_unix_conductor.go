@@ -209,9 +209,10 @@ func admittedDaemonConfig(paths runtime.PathProvider) *runtime.Config {
 }
 
 // conductorRouterOptions is the router wiring the daemon applies: the node
-// placement seam first, then transient retry, then extra (the
-// restricted-permit option). One helper so the production wiring and the
-// resume tests' deny wiring cannot differ.
+// placement seam first, then transient retry, then the refusing lane tier
+// cap, then extra (the restricted-permit option and the topology lane tier
+// cap, which replaces the refusing one). One helper so the production wiring
+// and the resume tests' deny wiring cannot differ.
 func conductorRouterOptions(tunnels nodes.TunnelStateLookup, paths runtime.PathProvider, clock runtime.Clock, extra []conductor.RouterOption) []conductor.RouterOption {
 	return conductorRouterOptionsEligible(tunnels, paths, clock, nil, extra)
 }
@@ -221,7 +222,9 @@ func conductorRouterOptions(tunnels nodes.TunnelStateLookup, paths runtime.PathP
 // lane is always eligible.
 func conductorRouterOptionsEligible(tunnels nodes.TunnelStateLookup, paths runtime.PathProvider, clock runtime.Clock, eligible conductor.LaneEligible, extra []conductor.RouterOption) []conductor.RouterOption {
 	placement := conductor.NodePlacement(nodes.Engine{Tunnels: tunnels}, nodeRecordStore(paths, clock))
-	return append([]conductor.RouterOption{placement, daemonRetryOption(clock, eligible)}, extra...)
+	// The refusing default cap comes first so a caller that names none still
+	// builds a router that admits nothing; the production cap in extra wins.
+	return append([]conductor.RouterOption{placement, daemonRetryOption(clock, eligible), conductor.WithLaneTierCap(refuseLaneTierCap)}, extra...)
 }
 
 // daemonRetryOption applies SetRetry to the Executor built over the
@@ -253,15 +256,21 @@ func contextSleep(ctx context.Context, d time.Duration) error {
 // non-string entry) refuses KindInvalidInput and the daemon does not start
 // with a permit list it cannot read exactly.
 func restrictedPermitsOption(cfg *runtime.Config) (conductor.RouterOption, error) {
-	var section map[string]interface{}
-	if cfg != nil {
-		section, _ = cfg.Extra["conductor"].(map[string]interface{})
-	}
-	permits, err := conductor.ParseRestrictedPermits(section)
+	permits, err := restrictedPermitsOf(cfg)
 	if err != nil {
 		return nil, err
 	}
 	return conductor.WithRestrictedPermits(permits), nil
+}
+
+// restrictedPermitsOf parses the permit list restrictedPermitsOption applies;
+// the lane tier cap reads the same value.
+func restrictedPermitsOf(cfg *runtime.Config) (conductor.RestrictedPermits, error) {
+	var section map[string]interface{}
+	if cfg != nil {
+		section, _ = cfg.Extra["conductor"].(map[string]interface{})
+	}
+	return conductor.ParseRestrictedPermits(section)
 }
 
 // nodeRecordStore opens the enrolled-node record store over the SAME

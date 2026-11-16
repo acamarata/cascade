@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/audit"
+	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -49,7 +50,7 @@ func TestConductorExecute_RealSocket_NonMethodNotFound(t *testing.T) {
 	registry := rpc.NewRegistry()
 	manifest := NewManifest(nil, clock)
 	auditWriter := audit.New(storetest.NewMemStore(), clock, nil)
-	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{Reserver: passReserver{}}, ConductorFanOut{}); err != nil {
+	if err := RegisterConductorExecuteHandler(registry, manifest, fakeRegistryReader{}, fakeQuotaSpiller{}, nil, auditWriter, clock, ConductorSecurity{}, ConductorAccounting{Reserver: passReserver{}}, ConductorFanOut{}, conductor.WithLaneTierCap(daemonTestCap)); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
 

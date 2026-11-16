@@ -91,7 +91,7 @@ func bindDoor(t *testing.T, p *doorProvider, quota conductor.QuotaSpiller, sec C
 	t.Helper()
 	aw, clock := &doorAudit{}, runtime.NewSystemClock()
 	if err := RegisterConductorExecuteHandler(rpc.NewRegistry(), NewManifest(nil, clock), doorLanes{}, quota, p,
-		aw, clock, sec, ConductorAccounting{Reserver: passReserver{}}, ConductorFanOut{}); err != nil {
+		aw, clock, sec, ConductorAccounting{Reserver: passReserver{}}, ConductorFanOut{}, conductor.WithLaneTierCap(daemonTestCap)); err != nil {
 		t.Fatal(err)
 	}
 	return aw
@@ -137,7 +137,7 @@ func TestConductorDoorUnboundUnavailable(t *testing.T) {
 func TestConductorDoorExecutorUnavailable(t *testing.T) {
 	clock := runtime.NewSystemClock()
 	if err := RegisterConductorExecuteHandler(rpc.NewRegistry(), NewManifest(nil, clock), doorLanes{}, doorQuota{}, nil,
-		&doorAudit{}, clock, fullSecurity(t), ConductorAccounting{}, ConductorFanOut{}); err != nil {
+		&doorAudit{}, clock, fullSecurity(t), ConductorAccounting{}, ConductorFanOut{}, conductor.WithLaneTierCap(daemonTestCap)); err != nil {
 		t.Fatal(err)
 	}
 	for name, err := range doorMethodErrors(ProcessConductorDoor()) {

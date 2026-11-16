@@ -9,10 +9,12 @@ package daemon
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/runtime"
+	"github.com/acamarata/cascade/pkg/cascade"
 	"github.com/acamarata/cascade/pkg/provider"
 )
 
@@ -50,7 +52,7 @@ func (fakeQuotaSpiller) NextLane(_ context.Context, _ []conductor.LaneID) (condu
 
 func TestDaemonSubsystems_RouterTaxonomyWired(t *testing.T) {
 	m := NewManifest(nil, runtime.NewSystemClock())
-	router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, runtime.NewSystemClock())
+	router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, runtime.NewSystemClock(), conductor.WithLaneTierCap(daemonTestCap))
 	if err != nil {
 		t.Fatalf("RegisterConductorRouter: unexpected error %v", err)
 	}
@@ -99,7 +101,7 @@ func TestDaemonSubsystems_RouterTaxonomyWired_FailsClosedOnEmptyTable(t *testing
 func TestDaemonSubsystems_RouterOptionsApplied(t *testing.T) {
 	m := NewManifest(nil, runtime.NewSystemClock())
 	applied := 0
-	router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, runtime.NewSystemClock(),
+	router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, runtime.NewSystemClock(), conductor.WithLaneTierCap(daemonTestCap),
 		func(*conductor.DefaultRouter) { applied++ },
 		func(*conductor.DefaultRouter) { applied++ },
 	)
@@ -111,5 +113,53 @@ func TestDaemonSubsystems_RouterOptionsApplied(t *testing.T) {
 	}
 	if applied != 2 {
 		t.Fatalf("%d of 2 router options were applied", applied)
+	}
+}
+
+// daemonTestCap is the test-only fixture cap: every lane may carry any
+// content, so tests that do not exercise the ceiling can build a router.
+// It is a _test.go symbol, so no production code can reach it.
+func daemonTestCap(context.Context, conductor.LaneID, conductor.LaneType) (provider.SensitivityTier, string, error) {
+	return provider.SensitivityLocalOnly, "test-fixture", nil
+}
+
+// TestRegisterConductorRouterRequiresCap proves RegisterConductorRouter
+// refuses a router without a lane tier cap, absent or WithLaneTierCap(nil),
+// with KindInvalidInput and a failed Manifest entry, and registers with one.
+func TestRegisterConductorRouterRequiresCap(t *testing.T) {
+	clock := runtime.NewSystemClock()
+	for name, opts := range map[string][]conductor.RouterOption{
+		"absent": nil,
+		"nil":    {conductor.WithLaneTierCap(nil)},
+		"other":  {conductor.WithRestrictedPermits(conductor.RestrictedPermits{})},
+	} {
+		m := NewManifest(nil, clock)
+		router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, clock, opts...)
+		if router != nil || err != conductor.ErrLaneTierCapMissing { // identity, not Kind
+			t.Fatalf("%s: RegisterConductorRouter = %v, %v", name, router, err)
+		}
+		if k, _ := cascade.KindOf(err); k != cascade.KindInvalidInput {
+			t.Fatalf("%s: kind = %v, want KindInvalidInput", name, k)
+		}
+		if !strings.Contains(err.Error(), "no LaneTierCap supplied") {
+			t.Fatalf("%s: message = %q", name, err.Error())
+		}
+		failed := false
+		for _, s := range m.Snapshot() {
+			if s.Name == conductorRouterSubsystem && s.State == SubsystemError {
+				failed = true
+			}
+		}
+		if !failed {
+			t.Fatalf("%s: no failed %s Manifest entry: %+v", name, conductorRouterSubsystem, m.Snapshot())
+		}
+	}
+	m := NewManifest(nil, clock)
+	router, err := m.RegisterConductorRouter(fakeRegistryReader{}, fakeQuotaSpiller{}, clock, conductor.WithLaneTierCap(daemonTestCap), conductor.WithLaneTierCap(nil))
+	if err != nil || router == nil {
+		t.Fatalf("with a cap: RegisterConductorRouter = %v, %v", router, err)
+	}
+	if s := m.Snapshot(); len(s) != 1 || s[0].State != SubsystemRunning {
+		t.Fatalf("with a cap: Manifest = %+v, want one running entry", s)
 	}
 }

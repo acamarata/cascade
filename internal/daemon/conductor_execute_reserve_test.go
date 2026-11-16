@@ -62,7 +62,7 @@ func newReserveEnv(t *testing.T) (*fuEnv, *recordingReserver) {
 	st := &fuStore{MemStore: storetest.NewMemStore()}
 	p, clock, reg := &fuProvider{st: st}, runtime.NewSystemClock(), rpc.NewRegistry()
 	fan, rec := NewConductorFanOut(st, clock), &recordingReserver{}
-	if err := RegisterConductorExecuteHandler(reg, NewManifest(nil, clock), p, p, p, newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{Reserver: rec}, fan); err != nil {
+	if err := RegisterConductorExecuteHandler(reg, NewManifest(nil, clock), p, p, p, newTestAuditWriter(t), clock, fullSecurity(t), ConductorAccounting{Reserver: rec}, fan, conductor.WithLaneTierCap(daemonTestCap)); err != nil {
 		t.Fatal(err)
 	}
 	return &fuEnv{t: t, ctx: context.Background(), reg: reg, fan: fan, st: st, p: p}, rec

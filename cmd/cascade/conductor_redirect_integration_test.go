@@ -34,6 +34,7 @@ import (
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
 	"github.com/acamarata/cascade/pkg/cascade"
+	"github.com/acamarata/cascade/pkg/provider"
 	providertransport "github.com/acamarata/cascade/providers/transport"
 )
 
@@ -64,7 +65,7 @@ func redirectRig(t *testing.T, baseURL string) *fanRig {
 	r.fan = daemon.NewConductorFanOut(r.store, clock)
 	if err := daemon.RegisterConductorExecuteHandler(r.reg, r.manifest, providerregistry.NewReader(reg),
 		conductor.NewQuotaPolicy(cfg, clock), resolver, audit.New(storetest.NewMemStore(), clock, nil), clock,
-		security, daemon.ConductorAccounting{Reserver: passReserver{}}, r.fan); err != nil {
+		security, daemon.ConductorAccounting{Reserver: passReserver{}}, r.fan, conductor.WithLaneTierCap(redirectTestCap)); err != nil {
 		t.Fatal(err)
 	}
 	return r
@@ -114,4 +115,10 @@ func TestConductorExecuteRedirectIsError(t *testing.T) {
 	if target.calls.Load() == 0 {
 		t.Fatal("direct execute never reached the provider")
 	}
+}
+
+// redirectTestCap is the test-only fixture lane tier cap: every lane may
+// carry any content, so the redirect rig can build a router.
+func redirectTestCap(context.Context, conductor.LaneID, conductor.LaneType) (provider.SensitivityTier, string, error) {
+	return provider.SensitivityLocalOnly, "test-fixture", nil
 }

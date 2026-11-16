@@ -226,8 +226,21 @@ func (m *Manifest) RegisterConductorRouter(reg provider.ProviderRegistryReader, 
 	for _, opt := range opts {
 		opt(router)
 	}
+	if err := requireLaneTierCap(router); err != nil {
+		m.Failed(conductorRouterSubsystem, err.Error())
+		return nil, err
+	}
 	m.Started(conductorRouterSubsystem, fmt.Sprintf("%d task classes loaded", len(classes)))
 	return router, nil
+}
+
+// requireLaneTierCap returns conductor.ErrLaneTierCapMissing (KindInvalidInput)
+// unless router carries a non-nil lane tier cap.
+func requireLaneTierCap(router *conductor.DefaultRouter) error {
+	if !router.HasLaneTierCap() {
+		return conductor.ErrLaneTierCapMissing
+	}
+	return nil
 }
 
 // reachabilitySubsystem is the fail-loud Manifest name RegisterReachability

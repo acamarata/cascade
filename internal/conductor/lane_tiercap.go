@@ -2,7 +2,7 @@
 //   most sensitive tier one lane may carry and why; the fail-closed admit
 //   helper is what the sensitivity filter and the dispatch door call.
 // Inputs: a LaneTierCap supplied at construction via WithLaneTierCap.
-// Outputs: LaneTierCap, WithLaneTierCap and admitLaneTierCap.
+// Outputs: LaneTierCap, WithLaneTierCap, HasLaneTierCap and admitLaneTierCap.
 // Constraints: fail closed. A nil cap, a cap error or an empty reason never
 //   admits. There is no exported admit-all cap in non-test code; routing does
 //   not consult the cap yet (P1-TOP-02f wires it into the filter).
@@ -35,6 +35,12 @@ func WithLaneTierCap(c LaneTierCap) RouterOption {
 			r.laneTierCap = c
 		}
 	}
+}
+
+// HasLaneTierCap reports whether r carries a non-nil LaneTierCap. The
+// daemon's router registration refuses a router without one.
+func (r *DefaultRouter) HasLaneTierCap() bool {
+	return r != nil && r.laneTierCap != nil
 }
 
 // admitLaneTierCap reports whether lane (of type lt) may carry req under

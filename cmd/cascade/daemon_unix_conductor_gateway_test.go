@@ -211,7 +211,10 @@ func gatewayExecute(t *testing.T, cfg *runtime.Config, tr *gatewayFakeTransport,
 	rpcReg := rpc.NewRegistry()
 	if err := daemon.RegisterConductorExecuteHandler(rpcReg, daemon.NewManifest(nil, clock), providerregistry.NewReader(reg),
 		policy.Quota, resolver, audit.New(store, clock, nil), clock,
-		security, daemon.ConductorAccounting{Reserver: passReserver{}}, daemon.NewConductorFanOut(store, clock)); err != nil {
+		security, daemon.ConductorAccounting{Reserver: passReserver{}}, daemon.NewConductorFanOut(store, clock),
+		conductor.WithLaneTierCap(func(context.Context, conductor.LaneID, conductor.LaneType) (provider.SensitivityTier, string, error) {
+			return provider.SensitivityLocalOnly, "test-fixture", nil
+		})); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
 	params, _ := json.Marshal(map[string]any{"task_id": "t1", "task_class": "chat", "sensitivity": "public",
