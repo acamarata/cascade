@@ -989,13 +989,6 @@
     "symbol": "providers/agents/claude.FetchUsage"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_gate_stall.go",
-    "expected_caller": "cmd/cascade/daemon_unix_gate_stall.go, which P1-PBD-04d wires the gate-stall path in the daemon and applies its schema; retire this entry once that file calls ApplyGateAttemptsSchema",
-    "reason": "P1-PBD-04a ships ApplyGateAttemptsSchema with its tests; its first production caller is cmd/cascade/daemon_unix_gate_stall.go from P1-PBD-04d.",
-    "retire_ticket": "P1-PBD-04",
-    "symbol": "internal/jobs.ApplyGateAttemptsSchema"
-  },
-  {
     "caller_site": "cmd/cascade/wire_learn_routing.go",
     "expected_caller": "cmd/cascade/wire_learn_routing.go, which P1-LRN-07f wires the supervised learn-routing fold loop and applies the set; retire this entry once that file calls RoutingMigrationSet",
     "reason": "P1-LRN-07a ships RoutingMigrationSet with its tests; its first production caller is cmd/cascade/wire_learn_routing.go from P1-LRN-07f.",
@@ -1043,20 +1036,6 @@
     "reason": "P1-NODE-13a ships DefaultFileCountCeiling with its tests; its first production caller is internal/runtime/init/ingestguard.go from P1-NODE-13c.",
     "retire_ticket": "P1-NODE-13c",
     "symbol": "internal/repo.DefaultFileCountCeiling"
-  },
-  {
-    "caller_site": "cmd/cascade/hooks_approval.go",
-    "expected_caller": "cmd/cascade/hooks_approval.go, which P1-PBD-09d adds (the completion-approval hook over the stored request rows); retire this entry once that file calls ApplyCompletionApprovalSchema",
-    "reason": "P1-PBD-09a ships ApplyCompletionApprovalSchema with its tests; its first production caller is cmd/cascade/hooks_approval.go from P1-PBD-09d.",
-    "retire_ticket": "P1-PBD-09d",
-    "symbol": "internal/jobs.ApplyCompletionApprovalSchema"
-  },
-  {
-    "caller_site": "cmd/cascade/hooks_approval.go",
-    "expected_caller": "cmd/cascade/hooks_approval.go, which P1-PBD-09d adds (the completion-approval hook over the stored request rows); retire this entry once that file calls ErrApprovalPending",
-    "reason": "P1-PBD-09a ships ErrApprovalPending with its tests; its first production caller is cmd/cascade/hooks_approval.go from P1-PBD-09d.",
-    "retire_ticket": "P1-PBD-09d",
-    "symbol": "internal/jobs.ErrApprovalPending"
   },
   {
     "caller_site": "cmd/cascade/wire_learn_routing.go",
@@ -1108,32 +1087,11 @@
     "symbol": "internal/conductor.NewRemoteRoute"
   },
   {
-    "caller_site": "cmd/cascade/wire_conductor_chooser.go",
-    "expected_caller": "cmd/cascade/wire_conductor_chooser.go, which P1-TOP-02e adds (binds the chooser PrivacyGate and CredentialGate for the production router (R358)); retire this entry once that file calls BillingPrivacyGate",
-    "reason": "P1-TOP-02b ships BillingPrivacyGate with its tests; its first production caller is cmd/cascade/wire_conductor_chooser.go from P1-TOP-02e.",
-    "retire_ticket": "P1-TOP-02e",
-    "symbol": "internal/fleet/topology.BillingPrivacyGate"
-  },
-  {
-    "caller_site": "cmd/cascade/wire_conductor_chooser.go",
-    "expected_caller": "cmd/cascade/wire_conductor_chooser.go, which P1-TOP-02e adds (binds the chooser PrivacyGate and CredentialGate for the production router (R358)); retire this entry once that file calls EvidenceCredentialGate",
-    "reason": "P1-TOP-02b ships EvidenceCredentialGate with its tests; its first production caller is cmd/cascade/wire_conductor_chooser.go from P1-TOP-02e.",
-    "retire_ticket": "P1-TOP-02e",
-    "symbol": "internal/fleet/topology.EvidenceCredentialGate"
-  },
-  {
     "caller_site": "internal/nodes/relay.go",
     "expected_caller": "internal/nodes/relay.go, which P1-NODE-06c adds (the node relay handler that stamps the relay origin before re-entering the router); retire this entry once that file calls WithRelayOrigin",
     "reason": "P1-NODE-06a ships WithRelayOrigin with its tests; its first production caller is internal/nodes/relay.go from P1-NODE-06c.",
     "retire_ticket": "P1-NODE-06c",
     "symbol": "internal/conductor.WithRelayOrigin"
-  },
-  {
-    "caller_site": "cmd/cascade/daemon_unix_conductor_lanecap.go",
-    "expected_caller": "cmd/cascade/daemon_unix_conductor_lanecap.go, which P1-TOP-02e adds beside daemon_unix_conductor.go to build the production router with WithLaneTierCap over the fleet topology; retire this entry once that file calls WithLaneTierCap",
-    "reason": "P1-TOP-02c adds the LaneTierCap router option and the fail-closed admit helper with their tests; routing does not consult the cap yet and the production composition that passes it is P1-TOP-02e.",
-    "retire_ticket": "P1-TOP-02e",
-    "symbol": "internal/conductor.WithLaneTierCap"
   },
   {
     "caller_site": "internal/ci/fanout_dataclass.go",
@@ -1453,5 +1411,21 @@
     "reason": "operator handover is P2 per ADR-0001 §5; P1 ships the API only",
     "retire_ticket": "P2-NAHB-15",
     "symbol": "internal/nodes.Handover"
+  },
+  {
+    "added_by_ticket": "P1-TOP-02e",
+    "caller_site": "cmd/cascade/daemon_chooser_wire.go",
+    "expected_caller": "cmd/cascade/daemon_chooser_wire.go, the daemon composition root that constructs the one long-lived topology Chooser (the caller_site of the NewChooser row, retire_ticket P1-TOP-11); retire this entry once that file passes BillingPrivacyGate to NewChooser",
+    "reason": "P1-TOP-02b ships BillingPrivacyGate with its tests. A PrivacyGate binds only where a Chooser is built, and no production NewChooser caller exists yet (NewChooser is itself allow-listed to P1-TOP-11); P1-TOP-02e's write_scope has no chooser file, so the gate binds with the Chooser's own composition.",
+    "retire_ticket": "P1-TOP-11",
+    "symbol": "internal/fleet/topology.BillingPrivacyGate"
+  },
+  {
+    "added_by_ticket": "P1-TOP-02e",
+    "caller_site": "cmd/cascade/daemon_chooser_wire.go",
+    "expected_caller": "cmd/cascade/daemon_chooser_wire.go, the daemon composition root that constructs the one long-lived topology Chooser (the caller_site of the NewChooser row, retire_ticket P1-TOP-11); retire this entry once that file passes EvidenceCredentialGate over newEvidenceKeyFn to NewChooser",
+    "reason": "P1-TOP-02b ships EvidenceCredentialGate with its tests. A CredentialGate binds only where a Chooser is built, and no production NewChooser caller exists yet (NewChooser is itself allow-listed to P1-TOP-11); P1-TOP-02e's write_scope has no chooser file, so the gate binds with the Chooser's own composition.",
+    "retire_ticket": "P1-TOP-11",
+    "symbol": "internal/fleet/topology.EvidenceCredentialGate"
   }
 ]
