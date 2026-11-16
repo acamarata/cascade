@@ -11,8 +11,9 @@
 // Inputs: NewClaudeInboxBridge(ctx, store, clock, attention) — the daemon's
 // provider.Store, its clock and its attention store; WireClaudeInboxPush
 // subscribes one active session's CandidateSession.
-// Outputs: records + claude.AppendResult{SessionID, Appended} (the taint
-// signal P1-E37-W8-S150-T1 marks); typed errors to the dispatch loop, which
+// Outputs: records + claude.AppendResult{SessionID, Appended}; the sticky
+// session taint (sessions.MarkUntrusted) committed before any untrusted
+// record leaves the queue; typed errors to the dispatch loop, which
 // re-delivers on the next drain.
 //
 // Constraints: plugins/claude never imports internal/** (this file is the
@@ -28,9 +29,11 @@ package plugins
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 
 	"github.com/acamarata/cascade/internal/context/scope"
+	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/notify"
 	"github.com/acamarata/cascade/internal/runtime"
@@ -52,6 +55,7 @@ type ClaudeInboxBridge struct {
 	hydration *claude.InboxHydration
 	attention *supervision.Store
 	clock     runtime.Clock
+	taint     *sessions.Store // marks sessions outside any drain transaction
 }
 
 // NewClaudeInboxBridge builds the hydration queue over store, the channel
@@ -72,14 +76,69 @@ func NewClaudeInboxBridge(ctx context.Context, store provider.Store, clock runti
 	if err := push.Start(ctx); err != nil {
 		return nil, err
 	}
-	return &ClaudeInboxBridge{push: push, hydration: hydration, attention: attention, clock: clock}, nil
+	return &ClaudeInboxBridge{
+		push: push, hydration: hydration, attention: attention, clock: clock,
+		taint: sessions.New(store, clock, nil),
+	}, nil
 }
 
 // ReadNextTurnForSession drains sessionID's pending records for its next
-// turn. The daemon's context.slice adapter is the production caller.
+// turn. The daemon's context.slice adapter is the production caller. No
+// untrusted record leaves the queue unless the drain transaction itself reads
+// the session as marked: a first pass that finds untrusted records on an
+// unmarked session aborts, MarkUntrusted(session, first untrusted record id)
+// commits, and the drain runs again. An unknown session or a mark error
+// returns nothing and leaves the queue unchanged.
 func (b *ClaudeInboxBridge) ReadNextTurnForSession(ctx context.Context, sessionID string) ([]claude.InboxRecord, claude.AppendResult, error) {
-	return b.hydration.AppendNextTurn(ctx, sessionID)
+	none := claude.AppendResult{SessionID: sessionID}
+	recs, res, err := b.hydration.AppendNextTurnWith(ctx, sessionID, requireTaint(b.clock, sessionID))
+	var need *taintNeeded
+	if !errors.As(err, &need) {
+		return recs, res, err
+	}
+	if err := b.taint.MarkUntrusted(ctx, sessionID, need.ref); err != nil {
+		return nil, none, err
+	}
+	recs, res, err = b.hydration.AppendNextTurnWith(ctx, sessionID, requireTaint(b.clock, sessionID))
+	if errors.As(err, &need) {
+		return nil, none, errTaintNotCommitted
+	}
+	return recs, res, err
 }
+
+// requireTaint is the drain's beforeCommit. Inside the drain transaction it
+// reads sessionID's taint (an unknown session aborts the drain) and aborts
+// with taintNeeded when an untrusted record would reach an unmarked session.
+// It never writes there: the sessions store's writers hold a process lock
+// while they wait for the store, and the drain transaction holds the store.
+func requireTaint(clock runtime.Clock, sessionID string) func(context.Context, []claude.InboxRecord) error {
+	return func(ctx context.Context, recs []claude.InboxRecord) error {
+		if len(recs) == 0 {
+			return nil
+		}
+		st, err := sessions.New(drainReader{tx: claude.DrainTx(ctx)}, clock, nil).Taint(ctx, sessionID)
+		if err != nil || st.Tainted {
+			return err
+		}
+		for _, r := range recs {
+			if r.Untrusted() {
+				return &taintNeeded{ref: r.ID}
+			}
+		}
+		return nil
+	}
+}
+
+// taintNeeded aborts a drain whose untrusted records need the session marked
+// first; ref is the first untrusted record's id.
+type taintNeeded struct{ ref string }
+
+func (e *taintNeeded) Error() string { return "plugins: session taint required before drain" }
+
+var (
+	errTaintNotCommitted = cascade.New(cascade.KindInternal, "plugins: session taint did not commit; drain refused")
+	errDrainReadOnly     = cascade.New(cascade.KindInternal, "plugins: the drain's session view is read-only")
+)
 
 // WireClaudeInboxPush subscribes session to reg for addressed delivery. It
 // never widens the session's scope: the CandidateSession is the caller's.
@@ -185,4 +244,28 @@ func inboxEventFrom(n notify.Notification) claude.InboxEvent {
 		CorrelationID: n.CorrelationID, ExpiresAt: n.ExpiresAt, Body: n.Payload,
 		DataClass: n.DataClass, Trust: n.Trust,
 	}
+}
+
+// drainReader presents the drain transaction as a read-only provider.Store,
+// so a sessions.Store reads inside it. A nil tx (no drain in progress) and
+// every write fail closed.
+type drainReader struct{ tx provider.Tx }
+
+func (s drainReader) Get(ctx context.Context, ns, key string) ([]byte, error) {
+	if s.tx == nil {
+		return nil, errDrainReadOnly
+	}
+	return s.tx.Get(ctx, ns, key)
+}
+
+func (drainReader) Put(context.Context, string, string, []byte) error { return errDrainReadOnly }
+
+func (drainReader) Delete(context.Context, string, string) error { return errDrainReadOnly }
+
+func (drainReader) Scan(context.Context, string, string) (provider.Iterator, error) {
+	return nil, errDrainReadOnly
+}
+
+func (drainReader) Tx(context.Context, func(context.Context, provider.Tx) error) error {
+	return errDrainReadOnly
 }

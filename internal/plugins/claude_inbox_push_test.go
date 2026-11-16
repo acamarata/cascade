@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/acamarata/cascade/internal/context/scope"
+	"github.com/acamarata/cascade/internal/fleet/sessions"
 	"github.com/acamarata/cascade/internal/fleet/supervision"
 	"github.com/acamarata/cascade/internal/notify"
 	"github.com/acamarata/cascade/internal/policy"
@@ -41,25 +42,11 @@ type inboxRig struct {
 	bridge *ClaudeInboxBridge
 	attn   *supervision.Store
 	svc    *notify.Service
+	taint  *sessions.Store
 }
 
-func newInboxRig(t *testing.T, sessions ...string) inboxRig {
-	t.Helper()
-	store := &nsRecorder{MemStore: storetest.NewMemStore(), written: map[string]bool{}}
-	attn := supervision.NewStore(store, inboxNow, nil, supervision.NewSystemIDGenerator(), 0)
-	bridge, err := NewClaudeInboxBridge(context.Background(), store, inboxNow, attn)
-	if err != nil {
-		t.Fatalf("NewClaudeInboxBridge: %v", err)
-	}
-	svc := notify.NewService(notify.DefaultConfig(), inboxNow, nil)
-	for _, sid := range sessions {
-		unwire, err := WireClaudeInboxPush(context.Background(), bridge, svc.Registry, notify.CandidateSession{SessionID: sid})
-		if err != nil {
-			t.Fatal(err)
-		}
-		t.Cleanup(unwire)
-	}
-	return inboxRig{store: store, bridge: bridge, attn: attn, svc: svc}
+func newInboxRig(t *testing.T, sids ...string) inboxRig {
+	return newInboxRigOn(t, storetest.NewMemStore(), inboxNow, sids...)
 }
 
 // deliver pushes n through the real notifier and dispatcher; an n with no
@@ -177,7 +164,17 @@ func TestClaudeInboxPushAdapterUntrustedContentTakesNoAction(t *testing.T) {
 	for i, body := range claims {
 		rig.deliver(t, notify.Notification{ID: "u" + string(rune('0'+i)), Class: notify.ClassAddressed, Visibility: notify.VisibilityPrivate, TargetSession: "s1", Payload: []byte(body)})
 	}
+	for ns := range rig.store.written {
+		if ns != claude.HydrationNamespace {
+			t.Fatalf("delivering untrusted content wrote namespace %q", ns)
+		}
+	}
 	recs, res := rig.drain(t, "s1")
+	for ns := range rig.store.written {
+		if ns != claude.HydrationNamespace && ns != sessions.DefaultNamespace {
+			t.Fatalf("draining untrusted content wrote namespace %q (only the queue and the taint may change)", ns)
+		}
+	}
 	block := claude.RenderInboxBlock(recs)
 	if len(recs) != len(claims) || !res.Appended || res.SessionID != "s1" {
 		t.Fatalf("drain = %d records, %+v", len(recs), res)
@@ -189,11 +186,6 @@ func TestClaudeInboxPushAdapterUntrustedContentTakesNoAction(t *testing.T) {
 	}
 	if _, err := verifier.Verify([]byte(block)); err == nil || bytes.Contains([]byte(block), token) {
 		t.Fatal("the rendered block carries a verifiable approval token")
-	}
-	for ns := range rig.store.written {
-		if ns != claude.HydrationNamespace {
-			t.Fatalf("delivering untrusted content wrote namespace %q", ns)
-		}
 	}
 }
 
@@ -261,24 +253,25 @@ func TestClaudeInboxPushAdapterStoreFailureRedelivers(t *testing.T) {
 
 // nsRecorder records every namespace written and can fail transactions.
 type nsRecorder struct {
-	*storetest.MemStore
+	provider.Store
 	written map[string]bool
 	failTx  bool
+	failNS  string // Put to this namespace fails
 }
 
 func (r *nsRecorder) Put(ctx context.Context, ns, key string, value []byte) error {
-	if r.failTx {
+	if r.failTx || ns == r.failNS {
 		return errStoreOffline
 	}
 	r.written[ns] = true
-	return r.MemStore.Put(ctx, ns, key, value)
+	return r.Store.Put(ctx, ns, key, value)
 }
 
 func (r *nsRecorder) Tx(ctx context.Context, fn func(context.Context, provider.Tx) error) error {
 	if r.failTx {
 		return errStoreOffline
 	}
-	return r.MemStore.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
+	return r.Store.Tx(ctx, func(ctx context.Context, tx provider.Tx) error {
 		return fn(ctx, nsRecordingTx{Tx: tx, written: r.written})
 	})
 }
