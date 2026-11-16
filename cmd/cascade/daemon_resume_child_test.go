@@ -166,6 +166,7 @@ func wireDenyConductor(w *daemonWiring, store provider.Store, pol conductor.Poli
 	if err != nil {
 		return daemon.ConductorFanOut{}, err
 	}
+	accounting.Reserver = dispatchSlotFor(w.Manifest)
 	return registerDenyConductor(w, store, reg, healthMgr, resolver, security, accounting)
 }
 

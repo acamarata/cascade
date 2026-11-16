@@ -126,6 +126,10 @@ func wireConductorExecute(ctx context.Context, registry *rpc.Registry, manifest 
 	if aerr != nil {
 		return daemon.ConductorFanOut{}, aerr
 	}
+	// The one call reserver is this daemon's dispatch slot, which the
+	// fleet-dispatch registration binds to FleetRuntime.Reserver
+	// (wire_fleet_dispatch.go); unbound, every dispatch refuses.
+	accounting.Reserver = dispatchSlotFor(manifest)
 	// After conductorSecurity, which binds the process firewall to this
 	// daemon's data directory: the audit log opens over the same vault.
 	auditWriter, err := openDaemonAuditLog(store, clock, nil, paths)
