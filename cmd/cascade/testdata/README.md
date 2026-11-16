@@ -26,6 +26,13 @@ round-trips through the transcript struct byte for byte, and compares it with a
 fresh in-process run. Integration tests that need the handshake without a
 daemon load the same struct.
 
+`TestConductorExecuteHandlerWiringWithCap` replays the fixture's requests
+through the daemon's production `conductor` registration, which hands the
+topology lane tier cap to `RegisterConductorExecuteHandler`. The malformed
+request must get the recorded decode reply. The well-formed one must get past
+the security pipeline, which that registration wires and the bare handshake
+does not, so its reply is checked for shape, not compared byte for byte.
+
 Regenerate after an intended change to the handshake:
 
 ```sh

@@ -1,9 +1,13 @@
+//go:build !windows
+
 // Purpose: holds the recorded conductor wiring transcript fixture
 // (testdata/conductor_wiring_transcript.json) to the real in-process
 // handshake: RegisterConductorExecuteHandler on a fresh rpc.Registry, then
 // conductor.execute dispatched through it. The fixture is loaded into the
 // transcript struct the conductor integration tests read, checked to
-// round-trip, and compared frame by frame with a fresh run.
+// round-trip, and compared frame by frame with a fresh run. The same
+// requests are then replayed through the daemon's production "conductor"
+// registration, which threads the topology lane tier cap into the router.
 // Inputs: testdata/conductor_wiring_transcript.json.
 // Outputs: the fixture, rewritten only under CASCADE_TESTKIT_UPDATE_GOLDEN=1
 // outside CI.
@@ -17,11 +21,13 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/acamarata/cascade/internal/audit"
 	"github.com/acamarata/cascade/internal/conductor"
 	"github.com/acamarata/cascade/internal/daemon"
+	"github.com/acamarata/cascade/internal/fleet/topology"
 	"github.com/acamarata/cascade/internal/rpc"
 	"github.com/acamarata/cascade/internal/runtime"
 	"github.com/acamarata/cascade/internal/storage/storetest"
@@ -93,10 +99,16 @@ func recordConductorWiring(ctx context.Context, t *testing.T) conductorWiringTra
 		daemon.ConductorAccounting{}, daemon.ConductorFanOut{}, conductor.WithLaneTierCap(transcriptCap)); err != nil {
 		t.Fatalf("RegisterConductorExecuteHandler: %v", err)
 	}
-	requests := []json.RawMessage{
+	return dispatchConductorWiring(ctx, t, reg, []json.RawMessage{
 		json.RawMessage(`{"task_id":"t1","task_class":"chat","sensitivity":"public","inputs":[{"role":"user","content":"hello"}]}`),
 		json.RawMessage(`{"sensitivity":3}`),
-	}
+	})
+}
+
+// dispatchConductorWiring sends each request params to conductor.execute on
+// reg, in order, and returns the request and reply frames.
+func dispatchConductorWiring(ctx context.Context, t *testing.T, reg *rpc.Registry, requests []json.RawMessage) conductorWiringTranscript {
+	t.Helper()
 	var tr conductorWiringTranscript
 	for _, params := range requests {
 		tr.Frames = append(tr.Frames, conductorWiringFrame{Direction: "request", Method: daemon.ConductorExecuteMethod, Params: params})
@@ -112,6 +124,23 @@ func recordConductorWiring(ctx context.Context, t *testing.T) conductorWiringTra
 		tr.Frames = append(tr.Frames, reply)
 	}
 	return tr
+}
+
+// conductorWiringRequests returns the params of tr's request frames, in
+// order. A request frame for another method fails the test.
+func conductorWiringRequests(t *testing.T, tr conductorWiringTranscript) []json.RawMessage {
+	t.Helper()
+	var out []json.RawMessage
+	for i, f := range tr.Frames {
+		if f.Direction != "request" {
+			continue
+		}
+		if f.Method != daemon.ConductorExecuteMethod {
+			t.Fatalf("frame %d method %q, want %q", i, f.Method, daemon.ConductorExecuteMethod)
+		}
+		out = append(out, f.Params)
+	}
+	return out
 }
 
 func marshalConductorWiring(t *testing.T, tr conductorWiringTranscript) []byte {
@@ -178,4 +207,74 @@ func TestConductorWiringTranscriptLoads(t *testing.T) {
 // is local-only, so the cap never widens what the handshake can reach.
 func transcriptCap(context.Context, conductor.LaneID, conductor.LaneType) (provider.SensitivityTier, string, error) {
 	return provider.SensitivityLocalOnly, "transcript-fixture", nil
+}
+
+// TestConductorExecuteHandlerWiringWithCap runs the daemon's production
+// "conductor" registration (wire_conductor.go), which hands the topology lane
+// tier cap to RegisterConductorExecuteHandler, and replays the recorded
+// transcript's requests through the registry it wired. The router and the
+// executor must start, the paid-evidence rule must be bound, the malformed
+// request must get the recorded decode reply, and the well-formed one must
+// pass the security pipeline the bare handshake lacks.
+func TestConductorExecuteHandlerWiringWithCap(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	paths := fakeMemoryPaths{root: t.TempDir()}
+	if err := os.MkdirAll(paths.DataDir(), 0o700); err != nil {
+		t.Fatalf("MkdirAll(DataDir): %v", err)
+	}
+	oldPaid := topology.PaidEvidenceCurrent
+	topology.PaidEvidenceCurrent = nil
+	t.Cleanup(func() { topology.PaidEvidenceCurrent = oldPaid })
+	clock := runtime.NewSystemClock()
+	w := &daemonWiring{Ctx: ctx, Registry: rpc.NewRegistry(), Manifest: daemon.NewManifest(nil, clock),
+		Clock: clock, Paths: paths, Store: storetest.NewMemStore()}
+	if err := registrationNamed(t, "conductor").Wire(w); err != nil {
+		t.Fatalf("conductor registration: %v", err)
+	}
+	running := map[string]bool{}
+	for _, s := range w.Manifest.Snapshot() {
+		running[s.Name] = s.State == daemon.SubsystemRunning
+	}
+	if !running["conductor.router"] || !running["conductor.executor"] {
+		t.Fatalf("router or executor not running: %+v", w.Manifest.Snapshot())
+	}
+	if topology.PaidEvidenceCurrent == nil {
+		t.Fatal("the conductor registration did not bind the paid-evidence rule")
+	}
+	recorded, _ := loadConductorWiringTranscript(t, conductorWiringTranscriptPath)
+	got := dispatchConductorWiring(ctx, t, w.Registry, conductorWiringRequests(t, recorded))
+	if len(got.Frames) != len(recorded.Frames) {
+		t.Fatalf("replay has %d frames, the fixture %d", len(got.Frames), len(recorded.Frames))
+	}
+	assertWiredReplies(t, recorded, got)
+}
+
+// assertWiredReplies checks the production replay against the fixture: the
+// decode refusal is identical, and the well-formed request reaches the
+// executor past the security pipeline.
+func assertWiredReplies(t *testing.T, recorded, got conductorWiringTranscript) {
+	t.Helper()
+	wellFormed, malformed := got.Frames[1], got.Frames[3]
+	if wellFormed.Error == nil && len(wellFormed.Result) == 0 {
+		t.Fatal("well-formed request: a reply with neither result nor error")
+	}
+	if e := wellFormed.Error; e != nil {
+		for _, refusal := range []string{"executor unavailable", conductor.ErrSecurityPipelineNotReady.Error(), "no LaneTierCap supplied"} {
+			if strings.Contains(e.Message, refusal) {
+				t.Fatalf("well-formed request refused by the wiring: %q", e.Message)
+			}
+		}
+	}
+	want, err := json.Marshal(recorded.Frames[3])
+	if err != nil {
+		t.Fatalf("marshal recorded reply: %v", err)
+	}
+	gotRaw, err := json.Marshal(malformed)
+	if err != nil {
+		t.Fatalf("marshal replayed reply: %v", err)
+	}
+	if !bytes.Equal(gotRaw, want) {
+		t.Fatalf("malformed request reply = %s, recorded %s", gotRaw, want)
+	}
 }
