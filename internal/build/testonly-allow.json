@@ -5243,5 +5243,157 @@
     "reason": "P2-OWS-07 landed CreateGrant in internal/ownerauth/standing.go; P2-WIRB-60 is the ticket that wires it into cmd/cascade.",
     "retire_ticket": "P2-WIRB-60",
     "symbol": "internal/ownerauth.CreateGrant"
+  },
+  {
+    "added_by_ticket": "P2-GATL-07",
+    "caller_site": "internal/atlas/wire_gatl.go",
+    "expected_caller": "internal/atlas/wire_gatl.go, the P2-WIRE-05 wiring of P2-ATL, which calls MigrateDropBody; retire this entry once that file calls it",
+    "reason": "P2-GATL-07 ships MigrateDropBody with tests as a P2 gap unit; P2-WIRE-05 wires it into its home P2-ATL once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/atlas/wire_gatl.go exists without the call.",
+    "retire_ticket": "P2-WIRE-05",
+    "symbol": "internal/atlas.MigrateDropBody"
+  },
+  {
+    "added_by_ticket": "P2-GATL-17a",
+    "caller_site": "internal/atlas/wire_gatl.go",
+    "expected_caller": "internal/atlas/wire_gatl.go, the P2-WIRE-05 wiring of P2-ATL, which calls RebuildIndex; retire this entry once that file calls it",
+    "reason": "P2-GATL-17a ships RebuildIndex with tests as a P2 gap unit; P2-WIRE-05 wires it into its home P2-ATL once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/atlas/wire_gatl.go exists without the call.",
+    "retire_ticket": "P2-WIRE-05",
+    "symbol": "internal/atlas.RebuildIndex"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-14",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls CheckAgentOp; retire this entry once that file calls it",
+    "reason": "P2-GBGA-14 ships CheckAgentOp with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.CheckAgentOp"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-14",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls CheckWebchatQuery; retire this entry once that file calls it",
+    "reason": "P2-GBGA-14 ships CheckWebchatQuery with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.CheckWebchatQuery"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-30",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls DefaultUIConfig; retire this entry once that file calls it",
+    "reason": "P2-GBGA-30 ships DefaultUIConfig with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.DefaultUIConfig"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-30",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls Spawn; retire this entry once that file calls it",
+    "reason": "P2-GBGA-30 ships Spawn with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.Spawn"
+  },
+  {
+    "added_by_ticket": "P2-GBGA-12",
+    "caller_site": "internal/background/wire_gbga.go",
+    "expected_caller": "internal/background/wire_gbga.go, the P2-WIRE-07 wiring of P2-BGA, which calls SystemPrompt; retire this entry once that file calls it",
+    "reason": "P2-GBGA-12 ships SystemPrompt with tests as a P2 gap unit; P2-WIRE-07 wires it into its home P2-BGA once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/background/wire_gbga.go exists without the call.",
+    "retire_ticket": "P2-WIRE-07",
+    "symbol": "internal/background.SystemPrompt"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-19, whose ticket text names ActionMessage; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships ActionMessage with tests; P2-COP-19 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-19",
+    "symbol": "internal/conductor.ActionMessage"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-19, whose ticket text names ActionRaiseWidth; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships ActionRaiseWidth with tests; P2-COP-19 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-19",
+    "symbol": "internal/conductor.ActionRaiseWidth"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-19, whose ticket text names ActionRelaunch; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships ActionRelaunch with tests; P2-COP-19 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-19",
+    "symbol": "internal/conductor.ActionRelaunch"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-19, whose ticket text names ActionRequeue; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships ActionRequeue with tests; P2-COP-19 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-19",
+    "symbol": "internal/conductor.ActionRequeue"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-18, whose ticket text names StallClassBlocked; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships StallClassBlocked with tests; P2-COP-18 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-18",
+    "symbol": "internal/conductor.StallClassBlocked"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-18, whose ticket text names StallClassRedCI; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships StallClassRedCI with tests; P2-COP-18 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-18",
+    "symbol": "internal/conductor.StallClassRedCI"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-18, whose ticket text names StallClassRefused; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships StallClassRefused with tests; P2-COP-18 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-18",
+    "symbol": "internal/conductor.StallClassRefused"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-18, whose ticket text names StallClassStalled; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships StallClassStalled with tests; P2-COP-18 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-18",
+    "symbol": "internal/conductor.StallClassStalled"
+  },
+  {
+    "added_by_ticket": "P2-COP-17",
+    "caller_site": "internal/conductor/hunter_stall.go",
+    "expected_caller": "internal/conductor/hunter_stall.go, written by P2-COP-18, whose ticket text names StallDetector; retire this entry once that file uses it",
+    "reason": "P2-COP-17 ships StallDetector with tests; P2-COP-18 is the first later ticket that names it and creates internal/conductor/hunter_stall.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/conductor/hunter_stall.go exists without the reference.",
+    "retire_ticket": "P2-COP-18",
+    "symbol": "internal/conductor.StallDetector"
+  },
+  {
+    "added_by_ticket": "P2-COP-36",
+    "caller_site": "cmd/cascade/wire_crunch_ops.go",
+    "expected_caller": "cmd/cascade/wire_crunch_ops.go, written by P2-WIRB-06, whose ticket text names ComputeStatusCounts; retire this entry once that file uses it",
+    "reason": "P2-COP-36 ships ComputeStatusCounts with tests; P2-WIRB-06 is the first later ticket that names it and creates cmd/cascade/wire_crunch_ops.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once cmd/cascade/wire_crunch_ops.go exists without the reference.",
+    "retire_ticket": "P2-WIRB-06",
+    "symbol": "internal/crunch.ComputeStatusCounts"
+  },
+  {
+    "added_by_ticket": "P2-COP-36",
+    "caller_site": "cmd/cascade/wire_crunch_ops.go",
+    "expected_caller": "cmd/cascade/wire_crunch_ops.go, written by P2-WIRB-06, whose ticket text names YieldFixTickets; retire this entry once that file uses it",
+    "reason": "P2-COP-36 ships YieldFixTickets with tests; P2-WIRB-06 is the first later ticket that names it and creates cmd/cascade/wire_crunch_ops.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once cmd/cascade/wire_crunch_ops.go exists without the reference.",
+    "retire_ticket": "P2-WIRB-06",
+    "symbol": "internal/crunch.YieldFixTickets"
+  },
+  {
+    "added_by_ticket": "P2-COP-23",
+    "caller_site": "internal/supervise/watch.go",
+    "expected_caller": "internal/supervise/watch.go, written by P2-COP-24, whose ticket text names NeedsRebuild; retire this entry once that file uses it",
+    "reason": "P2-COP-23 ships NeedsRebuild with tests; P2-COP-24 is the first later ticket that names it and creates internal/supervise/watch.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/supervise/watch.go exists without the reference.",
+    "retire_ticket": "P2-COP-24",
+    "symbol": "internal/supervise.NeedsRebuild"
   }
 ]
