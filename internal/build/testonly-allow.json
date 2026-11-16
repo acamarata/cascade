@@ -792,13 +792,6 @@
     "symbol": "providers/agents/local.NewQualifier"
   },
   {
-    "caller_site": "cmd/cascade/daemon_unix_hooks.go",
-    "expected_caller": "P1-SUP-02's daemon composition, which builds the runner table with PluginCallRunner over the plugin registry's dispatcher",
-    "reason": "The runner-table constructor for plugin-call ships with the engine; the table is assembled at the composition root, which is P1-SUP-02's scope, so only internal/hooks tests call it at this tip.",
-    "retire_ticket": "P1-SUP-02",
-    "symbol": "internal/hooks.PluginCallRunner"
-  },
-  {
     "caller_site": "internal/learn/finding.go",
     "expected_caller": "cmd/cascade/wire_learn.go (P1-LRN-05), which composes the store, feed, detector and router; P1-LRN-02's FindingFeed receives a FindingWriter (NewFindingFeed(db, ledger, w FindingWriter)) and does not build one",
     "reason": "PCI s64t1-findingwriter-owner-is-s71t2, settled at CR: legacy P1-E35-W7-S71-T2 is carried to P1-LRN-02, whose outputs take the writer as a parameter; the non-test construction lands in P1-LRN-05's daemon composition (plan/p1/epics/LRN/tickets.yaml P1-LRN-05 objective). Wiring it to a fabricated/synthetic signal instead would violate the same no-fabricated-data rule this ticket enforces for outcome.go's HONEST GAP fields.",
