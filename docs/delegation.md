@@ -96,6 +96,24 @@ Nothing below is ever taken from RPC params.
 | Wall clock | `[agents.delegation] wall_clock` (default 30m), capped by `max_wall_clock` (at most 24h). |
 | Repository id | The daemon's repository identity binder, never a path, name or job id. |
 
+## Tool approvals
+
+`BridgeApprovals` files each approval request a delegated agent's driver raises
+as one entry in the policy approval queue, under capability
+`agents.tool_approval`, and answers the driver with a token only after the
+queue redeemed it once through `ConsumeToken`. A denial, cancel or timeout
+answers an empty token and cancels the entry.
+
+- A permissions grant with a path outside the envelope roots, a host outside
+  its egress, or no grant at all is refused with an empty token and journaled.
+  It never reaches the queue.
+- A token is forwarded only for an approval the witnessed `approval.grant`
+  recorded: its `approval.grant:<id>` effect must be confirmed. A direct
+  `Decide`, such as from the owner CLI, forwards nothing.
+- The queue passed to `BridgeApprovals` must also implement
+  `EffectState(ctx, key)` over the audit effect log that `approval.grant`
+  writes. A queue without it forwards nothing.
+
 ## Recovery
 
 At start, before either verb serves, the wiring runs `RecoverPendingSpawns`:
