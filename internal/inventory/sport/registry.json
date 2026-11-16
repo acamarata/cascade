@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-11-16T05:11:02Z",
+  "generated_at": "2026-11-16T09:01:08Z",
   "entities": [
     {
       "name": "AUDIT_REDACTION",
@@ -4968,6 +4968,20 @@
           "line": 14,
           "status": "",
           "raw": "cmd/cascade daemon inbox hydration composition (P1-HRN-02)."
+        }
+      ],
+      "statuses": [
+        ""
+      ]
+    },
+    {
+      "name": "cmd/cascade daemon learn wiring verification",
+      "sites": [
+        {
+          "file": "cmd/cascade/daemon_unix_learn_integration_test.go",
+          "line": 9,
+          "status": "",
+          "raw": "cmd/cascade daemon learn wiring verification."
         }
       ],
       "statuses": [
@@ -16148,6 +16162,48 @@
       ]
     },
     {
+      "name": "internal.ci.MirrorBacklogCheck",
+      "sites": [
+        {
+          "file": "internal/ci/gitgate_doctor.go",
+          "line": 9,
+          "status": "ADD",
+          "raw": "internal.ci.MirrorBacklogCheck/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.MirrorCapability",
+      "sites": [
+        {
+          "file": "internal/ci/gitgate_mirror.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.ci.MirrorCapability/ADDED."
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
+      "name": "internal.ci.MirrorPusher",
+      "sites": [
+        {
+          "file": "internal/ci/gitgate_mirror.go",
+          "line": 14,
+          "status": "ADD",
+          "raw": "internal.ci.MirrorPusher/ADDED"
+        }
+      ],
+      "statuses": [
+        "ADD"
+      ]
+    },
+    {
       "name": "internal.ci.NewCICmd",
       "sites": [
         {
@@ -22434,7 +22490,7 @@
       "sites": [
         {
           "file": "internal/runtime/config_ci.go",
-          "line": 21,
+          "line": 8,
           "status": "ADD",
           "raw": "internal.runtime.parseCIPolicySection/ADDED"
         }
@@ -28114,7 +28170,7 @@
       "sites": [
         {
           "file": "internal/plugins/claude_inbox_push.go",
-          "line": 25,
+          "line": 26,
           "status": "ADD",
           "raw": "internal/plugins cascade-claude inbox host adapter (ADD) —"
         }
@@ -39715,7 +39771,7 @@
       "sites": [
         {
           "file": "plugins/claude/inbox_hydration.go",
-          "line": 25,
+          "line": 21,
           "status": "ADD",
           "raw": "plugins/claude/inbox-next-turn-hydration (ADD)."
         }
@@ -45202,7 +45258,7 @@
       ]
     }
   ],
-  "total_sites": 4354,
-  "unspecified_count": 427,
+  "total_sites": 4358,
+  "unspecified_count": 428,
   "multi_status_count": 134
 }
