@@ -4717,14 +4717,6 @@
     "symbol": "internal/gateway/log.RunWithScratch"
   },
   {
-    "added_by_ticket": "P2-LIFE-25",
-    "caller_site": "internal/lifecycle/touch.go",
-    "expected_caller": "internal/lifecycle/touch.go, written by P2-LIFE-28: ConfirmPlan moves a Planning chat from Waiting to Archived; retire this entry once P2-LIFE-28 closes",
-    "reason": "P2-LIFE-25 declares ArchivedState as a P2 unit with tests; P2-LIFE-28 adds its production caller in internal/lifecycle/touch.go (P2 Plan D85). The caller-site gate checks this entry once P2-LIFE-28 closes.",
-    "retire_ticket": "P2-LIFE-28",
-    "symbol": "internal/lifecycle.ArchivedState"
-  },
-  {
     "added_by_ticket": "P2-OWS-03",
     "caller_site": "cmd/cascade/wire_units_ows.go",
     "expected_caller": "cmd/cascade/wire_units_ows.go, written by P2-WIRB-60: the daemon entry the CLI and UI reach after one owner sign-in calls it; retire this entry once P2-WIRB-60 closes",
@@ -5189,14 +5181,6 @@
     "symbol": "internal/rcl.CtxHit"
   },
   {
-    "added_by_ticket": "P2-GRCL-10a",
-    "caller_site": "internal/rcl/ctxdb_insert.go",
-    "expected_caller": "internal/rcl/ctxdb_insert.go, written by P2-GRCL-10b, whose ticket text names ErrCtxDBDuplicate; retire this entry once a non-test caller uses it",
-    "reason": "P2-GRCL-10a ships ErrCtxDBDuplicate with tests; P2-GRCL-10b is the first later ticket that names it, in internal/rcl/ctxdb_insert.go.",
-    "retire_ticket": "P2-GRCL-10b",
-    "symbol": "internal/rcl.ErrCtxDBDuplicate"
-  },
-  {
     "added_by_ticket": "P2-GDEV-01a",
     "caller_site": "plugins/pbd/workflows/venv_validate.go",
     "expected_caller": "plugins/pbd/workflows/venv_validate.go, written by P2-GDEV-01b, whose ticket text names FindPython; retire this entry once a non-test caller uses it",
@@ -5419,5 +5403,157 @@
     "reason": "P2-GBRK-03b ships CapacityLimit with tests as a P2 gap unit; P2-WIRE-11 wires it into its home P2-BRK once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/monitor/broker/wire_gbrk.go exists without the call.",
     "retire_ticket": "P2-WIRE-11",
     "symbol": "internal/monitor/broker.CapacityLimit"
+  },
+  {
+    "added_by_ticket": "P2-GFMX-53",
+    "caller_site": "internal/fmx/wire_gfmx.go",
+    "expected_caller": "internal/fmx/wire_gfmx.go, the P2-WIRE-32 wiring of P2-FMX, which calls ValidateLaneCapacity; retire this entry once that file calls it",
+    "reason": "P2-GFMX-53 ships ValidateLaneCapacity with tests as a P2 gap unit; P2-WIRE-32 wires it into its home P2-FMX once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/fmx/wire_gfmx.go exists without the call.",
+    "retire_ticket": "P2-WIRE-32",
+    "symbol": "internal/fmx.ValidateLaneCapacity"
+  },
+  {
+    "added_by_ticket": "P2-GHAR-22a",
+    "caller_site": "internal/harx/wire_ghar.go",
+    "expected_caller": "internal/harx/wire_ghar.go, the P2-WIRE-41 wiring of P2-HAR, which calls LaunchTrial; retire this entry once that file calls it",
+    "reason": "P2-GHAR-22a ships LaunchTrial with tests as a P2 gap unit; P2-WIRE-41 wires it into its home P2-HAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/harx/wire_ghar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-41",
+    "symbol": "internal/harx.LaunchTrial"
+  },
+  {
+    "added_by_ticket": "P2-GHAR-40a",
+    "caller_site": "internal/harx/wire_ghar.go",
+    "expected_caller": "internal/harx/wire_ghar.go, the P2-WIRE-41 wiring of P2-HAR, which calls ParseAfter; retire this entry once that file calls it",
+    "reason": "P2-GHAR-40a ships ParseAfter with tests as a P2 gap unit; P2-WIRE-41 wires it into its home P2-HAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/harx/wire_ghar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-41",
+    "symbol": "internal/harx.ParseAfter"
+  },
+  {
+    "added_by_ticket": "P2-GCL-09",
+    "caller_site": "internal/hook/contextgate.go",
+    "expected_caller": "internal/hook/contextgate.go, written by P2-GCL-10, whose ticket text names SessionContext; retire this entry once that file uses it",
+    "reason": "P2-GCL-09 ships SessionContext with tests; P2-GCL-10 is the first later ticket that names it and creates internal/hook/contextgate.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/hook/contextgate.go exists without the reference.",
+    "retire_ticket": "P2-GCL-10",
+    "symbol": "internal/hook.SessionContext"
+  },
+  {
+    "added_by_ticket": "P2-GCPAR-11a",
+    "caller_site": "internal/pbd/swarm/wire_gcpar.go",
+    "expected_caller": "internal/pbd/swarm/wire_gcpar.go, the P2-WIRE-21 wiring of P2-CPAR, which calls ConfigureBackend; retire this entry once that file calls it",
+    "reason": "P2-GCPAR-11a ships ConfigureBackend with tests as a P2 gap unit; P2-WIRE-21 wires it into its home P2-CPAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/pbd/swarm/wire_gcpar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-21",
+    "symbol": "internal/pbd/swarm.ConfigureBackend"
+  },
+  {
+    "added_by_ticket": "P2-GCPAR-11a",
+    "caller_site": "internal/pbd/swarm/wire_gcpar.go",
+    "expected_caller": "internal/pbd/swarm/wire_gcpar.go, the P2-WIRE-21 wiring of P2-CPAR, which calls ErrBackendUnavailable; retire this entry once that file calls it",
+    "reason": "P2-GCPAR-11a ships ErrBackendUnavailable with tests as a P2 gap unit; P2-WIRE-21 wires it into its home P2-CPAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/pbd/swarm/wire_gcpar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-21",
+    "symbol": "internal/pbd/swarm.ErrBackendUnavailable"
+  },
+  {
+    "added_by_ticket": "P2-GCPAR-11a",
+    "caller_site": "internal/pbd/swarm/wire_gcpar.go",
+    "expected_caller": "internal/pbd/swarm/wire_gcpar.go, the P2-WIRE-21 wiring of P2-CPAR, which calls ErrInvalidWriter; retire this entry once that file calls it",
+    "reason": "P2-GCPAR-11a ships ErrInvalidWriter with tests as a P2 gap unit; P2-WIRE-21 wires it into its home P2-CPAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/pbd/swarm/wire_gcpar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-21",
+    "symbol": "internal/pbd/swarm.ErrInvalidWriter"
+  },
+  {
+    "added_by_ticket": "P2-GCPAR-11a",
+    "caller_site": "internal/pbd/swarm/wire_gcpar.go",
+    "expected_caller": "internal/pbd/swarm/wire_gcpar.go, the P2-WIRE-21 wiring of P2-CPAR, which calls Run; retire this entry once that file calls it",
+    "reason": "P2-GCPAR-11a ships Run with tests as a P2 gap unit; P2-WIRE-21 wires it into its home P2-CPAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/pbd/swarm/wire_gcpar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-21",
+    "symbol": "internal/pbd/swarm.Run"
+  },
+  {
+    "added_by_ticket": "P2-GCPAR-40a",
+    "caller_site": "internal/prism/ledger/wire_gcpar.go",
+    "expected_caller": "internal/prism/ledger/wire_gcpar.go, the P2-WIRE-21 wiring of P2-CPAR, which calls SportDocs; retire this entry once that file calls it",
+    "reason": "P2-GCPAR-40a ships SportDocs with tests as a P2 gap unit; P2-WIRE-21 wires it into its home P2-CPAR once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/prism/ledger/wire_gcpar.go exists without the call.",
+    "retire_ticket": "P2-WIRE-21",
+    "symbol": "internal/prism/ledger.SportDocs"
+  },
+  {
+    "added_by_ticket": "P2-GRCL-22a",
+    "caller_site": "internal/rcl/wire_grcl.go",
+    "expected_caller": "internal/rcl/wire_grcl.go, the P2-WIRE-70 wiring of P2-RCL, which calls ExactLane; retire this entry once that file calls it",
+    "reason": "P2-GRCL-22a ships ExactLane with tests as a P2 gap unit; P2-WIRE-70 wires it into its home P2-RCL once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/rcl/wire_grcl.go exists without the call.",
+    "retire_ticket": "P2-WIRE-70",
+    "symbol": "internal/rcl.ExactLane"
+  },
+  {
+    "added_by_ticket": "P2-GCLC-65a",
+    "caller_site": "internal/rpc/conform/wire_gclc.go",
+    "expected_caller": "internal/rpc/conform/wire_gclc.go, the P2-WIRE-14 wiring of P2-CLC, which calls DefaultChecks; retire this entry once that file calls it",
+    "reason": "P2-GCLC-65a ships DefaultChecks with tests as a P2 gap unit; P2-WIRE-14 wires it into its home P2-CLC once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/rpc/conform/wire_gclc.go exists without the call.",
+    "retire_ticket": "P2-WIRE-14",
+    "symbol": "internal/rpc/conform.DefaultChecks"
+  },
+  {
+    "added_by_ticket": "P2-GCLC-65a",
+    "caller_site": "internal/rpc/conform/wire_gclc.go",
+    "expected_caller": "internal/rpc/conform/wire_gclc.go, the P2-WIRE-14 wiring of P2-CLC, which calls RunConformance; retire this entry once that file calls it",
+    "reason": "P2-GCLC-65a ships RunConformance with tests as a P2 gap unit; P2-WIRE-14 wires it into its home P2-CLC once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/rpc/conform/wire_gclc.go exists without the call.",
+    "retire_ticket": "P2-WIRE-14",
+    "symbol": "internal/rpc/conform.RunConformance"
+  },
+  {
+    "added_by_ticket": "P2-GCLC-67a",
+    "caller_site": "internal/rpc/wiregen/wire_gclc.go",
+    "expected_caller": "internal/rpc/wiregen/wire_gclc.go, the P2-WIRE-14 wiring of P2-CLC, which calls Generate; retire this entry once that file calls it",
+    "reason": "P2-GCLC-67a ships Generate with tests as a P2 gap unit; P2-WIRE-14 wires it into its home P2-CLC once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/rpc/wiregen/wire_gclc.go exists without the call.",
+    "retire_ticket": "P2-WIRE-14",
+    "symbol": "internal/rpc/wiregen.Generate"
+  },
+  {
+    "added_by_ticket": "P2-HSEC-29a",
+    "caller_site": "internal/secrets/preauth/wire_hsec.go",
+    "expected_caller": "internal/secrets/preauth/wire_hsec.go, the P2-WIRE-91 wiring of P2-HSEC, which calls ErrRateLimited; retire this entry once that file calls it",
+    "reason": "P2-HSEC-29a ships ErrRateLimited with tests as a P2 gap unit; P2-WIRE-91 wires it into its home P2-HSEC once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/secrets/preauth/wire_hsec.go exists without the call.",
+    "retire_ticket": "P2-WIRE-91",
+    "symbol": "internal/secrets/preauth.ErrRateLimited"
+  },
+  {
+    "added_by_ticket": "P2-HSEC-29a",
+    "caller_site": "internal/secrets/preauth/wire_hsec.go",
+    "expected_caller": "internal/secrets/preauth/wire_hsec.go, the P2-WIRE-91 wiring of P2-HSEC, which calls New; retire this entry once that file calls it",
+    "reason": "P2-HSEC-29a ships New with tests as a P2 gap unit; P2-WIRE-91 wires it into its home P2-HSEC once that code is on the branch (P2 plan D51). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/secrets/preauth/wire_hsec.go exists without the call.",
+    "retire_ticket": "P2-WIRE-91",
+    "symbol": "internal/secrets/preauth.New"
+  },
+  {
+    "added_by_ticket": "P2-OWS-08",
+    "caller_site": "internal/setup/doctor_fix.go",
+    "expected_caller": "internal/setup/doctor_fix.go, written by P2-OWS-10, whose ticket text names ErrBridgeStartFailed; retire this entry once that file uses it",
+    "reason": "P2-OWS-08 ships ErrBridgeStartFailed with tests; P2-OWS-10 is the first later ticket that names it and creates internal/setup/doctor_fix.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/setup/doctor_fix.go exists without the reference.",
+    "retire_ticket": "P2-OWS-10",
+    "symbol": "internal/setup.ErrBridgeStartFailed"
+  },
+  {
+    "added_by_ticket": "P2-OWS-08",
+    "caller_site": "internal/setup/doctor_fix.go",
+    "expected_caller": "internal/setup/doctor_fix.go, written by P2-OWS-10, whose ticket text names ErrGrantApplyFailed; retire this entry once that file uses it",
+    "reason": "P2-OWS-08 ships ErrGrantApplyFailed with tests; P2-OWS-10 is the first later ticket that names it and creates internal/setup/doctor_fix.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/setup/doctor_fix.go exists without the reference.",
+    "retire_ticket": "P2-OWS-10",
+    "symbol": "internal/setup.ErrGrantApplyFailed"
+  },
+  {
+    "added_by_ticket": "P2-OWS-08",
+    "caller_site": "internal/setup/doctor_fix.go",
+    "expected_caller": "internal/setup/doctor_fix.go, written by P2-OWS-10, whose ticket text names ErrOllamaStartFailed; retire this entry once that file uses it",
+    "reason": "P2-OWS-08 ships ErrOllamaStartFailed with tests; P2-OWS-10 is the first later ticket that names it and creates internal/setup/doctor_fix.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/setup/doctor_fix.go exists without the reference.",
+    "retire_ticket": "P2-OWS-10",
+    "symbol": "internal/setup.ErrOllamaStartFailed"
+  },
+  {
+    "added_by_ticket": "P2-OWS-08",
+    "caller_site": "internal/setup/doctor_fix.go",
+    "expected_caller": "internal/setup/doctor_fix.go, written by P2-OWS-10, whose ticket text names ErrSignInFailed; retire this entry once that file uses it",
+    "reason": "P2-OWS-08 ships ErrSignInFailed with tests; P2-OWS-10 is the first later ticket that names it and creates internal/setup/doctor_fix.go (P2 plan rule D54 for non-gap Epics). TestCallerSitesAreWiredOnceTheirFileExists fails this entry once internal/setup/doctor_fix.go exists without the reference.",
+    "retire_ticket": "P2-OWS-10",
+    "symbol": "internal/setup.ErrSignInFailed"
   }
 ]
