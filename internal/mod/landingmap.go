@@ -1,7 +1,10 @@
 // Package mod provides module resolution utilities.
 package mod
 
-import "errors"
+import (
+	"errors"
+	"reflect"
+)
 
 // LandingResolver is an interface for looking up module entries by name.
 type LandingResolver interface {
@@ -14,46 +17,56 @@ var ErrMissingLanding = errors.New("landing entry missing")
 // ErrConflictingLanding is returned when landing targets conflict.
 var ErrConflictingLanding = errors.New("landing target conflicts")
 
+// isAbsent reports whether r should be treated as absent.
+// A nil interface, a typed nil of a nilable kind detected via reflect,
+// or any other condition that makes Lookup unsafe returns true.
+func isAbsent(r LandingResolver) bool {
+	if r == nil {
+		return true
+	}
+	v := reflect.ValueOf(r)
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Map, reflect.Slice, reflect.Chan, reflect.Func:
+		return v.IsNil()
+	}
+	return false
+}
+
 // CheckLanding checks that both modulesTable and modulesMap resolve "Landing" to "Crunch".
-// For each non-nil input it calls Lookup("Landing") exactly once, modulesTable first then modulesMap.
-// Both must return ("Crunch", true) to return nil.
+// Absence in either input (nil interface, typed nil, or Lookup returning ok=false)
+// takes precedence over conflicting values and returns ErrMissingLanding.
+// Neither registry is mutated. Lookup is never invoked on an absent resolver.
 func CheckLanding(modulesTable, modulesMap LandingResolver) error {
+	tAbsent := isAbsent(modulesTable)
+	mAbsent := isAbsent(modulesMap)
+
 	var tVal, mVal string
 	var tOk, mOk bool
 
-	if modulesTable != nil {
+	if !tAbsent {
 		tVal, tOk = modulesTable.Lookup("Landing")
+	} else {
+		tOk = false
 	}
-	if modulesMap != nil {
+
+	if !mAbsent {
 		mVal, mOk = modulesMap.Lookup("Landing")
+	} else {
+		mOk = false
 	}
 
-	if modulesTable != nil && modulesMap != nil {
-		if !tOk || !mOk {
-			return ErrMissingLanding
-		}
-		if tVal != mVal {
-			return ErrConflictingLanding
-		}
-		if tVal != "Crunch" {
-			return ErrMissingLanding
-		}
-		return nil
+	// Missing takes precedence over conflict.
+	if !tOk || !mOk {
+		return ErrMissingLanding
 	}
 
-	if modulesTable != nil {
-		if !tOk || tVal != "Crunch" {
-			return ErrMissingLanding
-		}
-		return nil
+	if tVal != mVal {
+		return ErrConflictingLanding
 	}
 
-	if modulesMap != nil {
-		if !mOk || mVal != "Crunch" {
-			return ErrMissingLanding
-		}
-		return nil
+	if tVal != "Crunch" {
+		return ErrMissingLanding
 	}
 
-	return ErrMissingLanding
+	return nil
 }
