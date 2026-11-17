@@ -35,6 +35,8 @@ func isAbsent(r LandingResolver) bool {
 // CheckLanding checks that both modulesTable and modulesMap resolve "Landing" to "Crunch".
 // Absence in either input (nil interface, typed nil, or Lookup returning ok=false)
 // takes precedence over conflicting values and returns ErrMissingLanding.
+// A present result other than exactly "Crunch" returns ErrConflictingLanding,
+// even when both registries agree on that wrong target.
 // Neither registry is mutated. Lookup is never invoked on an absent resolver.
 func CheckLanding(modulesTable, modulesMap LandingResolver) error {
 	tAbsent := isAbsent(modulesTable)
@@ -60,12 +62,13 @@ func CheckLanding(modulesTable, modulesMap LandingResolver) error {
 		return ErrMissingLanding
 	}
 
+	// Both present: they must agree and the value must be exactly "Crunch".
 	if tVal != mVal {
 		return ErrConflictingLanding
 	}
 
 	if tVal != "Crunch" {
-		return ErrMissingLanding
+		return ErrConflictingLanding
 	}
 
 	return nil
