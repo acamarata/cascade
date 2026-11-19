@@ -1,9 +1,9 @@
 // Package write implements findings and restarter behaviour for the control plane.
 package write
 
-// Finding represents a diagnostic finding produced by the control plane.
+// StaleBinaryResult represents a diagnostic finding produced by the control plane.
 // It carries a classification kind and a human-readable text.
-type Finding struct {
+type StaleBinaryResult struct {
 	// Kind classifies the finding. For StaleBinaryFinding the value is
 	// "daemon_stale_binary".
 	Kind string
@@ -20,16 +20,16 @@ type Restarter interface {
 	Restart() error
 }
 
-// StaleBinaryFinding returns a Finding describing a stale binary condition.
+// StaleBinaryFinding returns a StaleBinaryResult describing a stale binary condition.
 // The finding states that no automatic restart is performed and that a
 // restart requires the owner to name it. The provided Restarter is never
 // called; the finding never triggers or schedules a restart.
-func StaleBinaryFinding(r Restarter) Finding {
+func StaleBinaryFinding(r Restarter) StaleBinaryResult {
 	// Intentionally do not call r.Restart() -- the finding must never
 	// trigger or schedule a restart.
 	_ = r
 
-	return Finding{
+	return StaleBinaryResult{
 		Kind: "daemon_stale_binary",
 		Text: "no automatic restart is performed; a restart requires the owner to name it",
 	}
