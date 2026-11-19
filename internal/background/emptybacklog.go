@@ -1,5 +1,7 @@
 package background
 
+import "time"
+
 // Backlog represents a collection of items to be processed.
 type Backlog struct {
 	Items []Item
@@ -15,6 +17,10 @@ type Item struct {
 type Finding struct {
 	Summary  string
 	Evidence string
+	// Resolved indicates whether the finding has been resolved.
+	Resolved bool
+	// FiledAt is the time the finding was first filed as an incident.
+	FiledAt time.Time
 }
 
 // HealthReading aggregates findings from a health check.

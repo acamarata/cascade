@@ -20,10 +20,14 @@ var ErrSubChat = errors.New("sub-chat failed")
 
 // SubSpawnRequest describes a request to spawn a sub-task.
 type SubSpawnRequest struct {
-	Task  string
-	Role  string
-	Scope string
-	Async bool
+	Task    string
+	Role    string
+	Scope   string
+	Async   bool
+	Action  string
+	Keyword string
+	Prompt  string
+	After   string
 }
 
 // SubChatRequest describes a request to open a sub-chat.

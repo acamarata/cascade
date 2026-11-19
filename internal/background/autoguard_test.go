@@ -7,7 +7,7 @@ import (
 
 func TestAutoguardSilencesRaiseCard(t *testing.T) {
 	called := false
-	suppressed, err := Guard(ModeAutonomous, func() error {
+	suppressed, err := AutoGuard(ModeAutonomous, func() error {
 		called = true
 		return errors.New("raiseCard should not be executed")
 	})
@@ -24,7 +24,7 @@ func TestAutoguardSilencesRaiseCard(t *testing.T) {
 
 func TestAutoguardSilencesRequestNoAsk(t *testing.T) {
 	called := false
-	suppressed, err := Guard(ModeAutonomous, func() error {
+	suppressed, err := AutoGuard(ModeAutonomous, func() error {
 		called = true
 		return errors.New("Request.NoAsk should not be executed")
 	})
@@ -41,7 +41,7 @@ func TestAutoguardSilencesRequestNoAsk(t *testing.T) {
 
 func TestAutoguardAllowsInteractiveMode(t *testing.T) {
 	called := false
-	suppressed, err := Guard(ModeInteractive, func() error {
+	suppressed, err := AutoGuard(ModeInteractive, func() error {
 		called = true
 		return nil
 	})
@@ -58,7 +58,7 @@ func TestAutoguardAllowsInteractiveMode(t *testing.T) {
 
 func TestAutoguardRejectsUnknownMode(t *testing.T) {
 	called := false
-	suppressed, err := Guard(Mode(""), func() error {
+	suppressed, err := AutoGuard(Mode(""), func() error {
 		called = true
 		return nil
 	})

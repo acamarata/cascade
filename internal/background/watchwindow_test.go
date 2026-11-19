@@ -9,7 +9,7 @@ func TestWatchSilentWithinSevenDays(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	now := t0.Add(6*24*time.Hour + 23*time.Hour + 59*time.Minute)
 
-	state := State{
+	state := WatchState{
 		FirstPass: t0,
 		Findings: []Finding{
 			{Resolved: false},
@@ -41,7 +41,7 @@ func TestWatchFilesAfterSevenDays(t *testing.T) {
 	t0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	now := t0.Add(7 * 24 * time.Hour)
 
-	state := State{
+	state := WatchState{
 		FirstPass: t0,
 		Findings: []Finding{
 			{Resolved: false, FiledAt: time.Time{}},
@@ -67,7 +67,7 @@ func TestWatchRefilesAfter24h(t *testing.T) {
 	filedAt := t0.Add(8 * 24 * time.Hour)
 	now := filedAt.Add(24 * time.Hour)
 
-	state := State{
+	state := WatchState{
 		FirstPass: t0,
 		Findings: []Finding{
 			{Resolved: false, FiledAt: filedAt},
@@ -93,7 +93,7 @@ func TestWatchNoRefileWhenResolved(t *testing.T) {
 	filedAt := t0.Add(8 * 24 * time.Hour)
 	now := filedAt.Add(48 * time.Hour)
 
-	state := State{
+	state := WatchState{
 		FirstPass: t0,
 		Findings: []Finding{
 			{Resolved: true, FiledAt: filedAt},
@@ -119,7 +119,7 @@ func TestWatchNoRefileBefore24h(t *testing.T) {
 	filedAt := t0.Add(8 * 24 * time.Hour)
 	now := filedAt.Add(23*time.Hour + 59*time.Minute)
 
-	state := State{
+	state := WatchState{
 		FirstPass: t0,
 		Findings: []Finding{
 			{Resolved: false, FiledAt: filedAt},

@@ -2,12 +2,8 @@
 package background
 
 import (
-	"errors"
 	"strings"
 )
-
-// ErrInvalidBatch is returned when a batch contains duplicate or blank IDs.
-var ErrInvalidBatch = errors.New("invalid batch")
 
 // BatchEvent represents a single event in a batch to be processed.
 type BatchEvent struct {

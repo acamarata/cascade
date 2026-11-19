@@ -27,16 +27,8 @@ type RefileAction struct {
 	Type ActionType
 }
 
-// Finding represents an open issue discovered during the watch window.
-type Finding struct {
-	// Resolved indicates whether the finding has been resolved.
-	Resolved bool
-	// FiledAt is the time the finding was first filed as an incident.
-	FiledAt time.Time
-}
-
-// State holds the current watch state passed to Evaluate.
-type State struct {
+// WatchState holds the current watch state passed to Evaluate.
+type WatchState struct {
 	// FirstPass is the time of the initial observation.
 	FirstPass time.Time
 	// Findings is the list of current findings.
@@ -45,7 +37,7 @@ type State struct {
 
 // Evaluate inspects the given state at time now and returns the appropriate actions.
 func Evaluate(state interface{}, now time.Time) []RefileAction {
-	s, ok := state.(State)
+	s, ok := state.(WatchState)
 	if !ok {
 		return nil
 	}

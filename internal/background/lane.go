@@ -8,8 +8,8 @@ var ErrD0665 = errors.New("D0665")
 // ErrEmptyName is returned when an empty lane program name is submitted.
 var ErrEmptyName = errors.New("empty name")
 
-// Submit validates and accepts a lane program name for the worker table.
-func Submit(name string) error {
+// SubmitLaneName validates and accepts a lane program name for the worker table.
+func SubmitLaneName(name string) error {
 	if name == "" {
 		return ErrEmptyName
 	}
