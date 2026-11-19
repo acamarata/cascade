@@ -28,6 +28,7 @@ var ErrInvalidGCISection = errors.New("invalid gci section")
 // If omissions is non-empty and sections are present, it is appended as a final "# Omissions" section.
 // Returns "", ErrInvalidGCISection for blank/whitespace-only Name or Body or duplicate Names.
 // Returns "", nil for nil/empty sections.
+// Returns "", ErrBudgetExceeded if the assembled output exceeds 1200 tokens (using (len+3)/4).
 func AssembleGCIBlock(sections []GCISection, omissions string) (string, error) {
 	if len(sections) == 0 {
 		return "", nil
