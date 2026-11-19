@@ -1,7 +1,9 @@
-// Package write provides functionality for writing control plane events.
 package write
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // ErrInvalidScheduledIndexEvent is returned when a ScheduledIndexEvent is invalid.
 var ErrInvalidScheduledIndexEvent = errors.New("D5382: invalid scheduled index event")
@@ -21,8 +23,13 @@ type EventSink interface {
 // It normalizes nil Names to a nonnil empty slice.
 // It passes a copied Names slice to the sink to prevent mutation of the caller's input.
 // If the sink returns an error, it is propagated unchanged without retry.
+// It validates that Counts is non-negative, Counts matches len(Names), and names are unique,
+// non-blank and contain no leading or trailing whitespace.
 func WriteScheduledIndexEvent(sink EventSink, event ScheduledIndexEvent) error {
 	if sink == nil {
+		return ErrInvalidScheduledIndexEvent
+	}
+	if event.Counts < 0 {
 		return ErrInvalidScheduledIndexEvent
 	}
 
@@ -30,6 +37,21 @@ func WriteScheduledIndexEvent(sink EventSink, event ScheduledIndexEvent) error {
 	names := event.Names
 	if names == nil {
 		names = []string{}
+	}
+
+	if event.Counts != len(names) {
+		return ErrInvalidScheduledIndexEvent
+	}
+
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		if name == "" || strings.TrimSpace(name) != name {
+			return ErrInvalidScheduledIndexEvent
+		}
+		if seen[name] {
+			return ErrInvalidScheduledIndexEvent
+		}
+		seen[name] = true
 	}
 
 	// Copy names slice to prevent sink mutation from affecting caller input
