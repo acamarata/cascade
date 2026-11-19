@@ -6,9 +6,6 @@ import (
 	"strings"
 )
 
-// ErrOwnerOnly indicates an operation restricted to owners.
-var ErrOwnerOnly = errors.New("owner only")
-
 // ErrInvalidRevalidate indicates the revalidate request failed validation.
 var ErrInvalidRevalidate = errors.New("invalid revalidate request")
 

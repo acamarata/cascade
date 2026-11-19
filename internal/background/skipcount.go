@@ -43,9 +43,6 @@ type ScheduleRequest struct {
 // ErrInvalidSchedule is returned when validation of the schedule request fails.
 var ErrInvalidSchedule = errors.New("invalid schedule")
 
-// ErrLiveCountLimit is returned when the live count exceeds the allowed maximum.
-var ErrLiveCountLimit = errors.New("live count limit reached")
-
 // Schedule validates req and, for manual triggers, enqueues the item directly.
 // It returns true on success or false with an error describing the failure.
 func Schedule(req ScheduleRequest, live LiveCountSource, queue BackgroundEnqueuer) (bool, error) {

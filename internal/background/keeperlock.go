@@ -8,14 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 )
-
-// pidAlive reports whether the process with the given pid is alive.
-// It is a variable so tests can override it.
-var pidAlive = func(pid int) bool {
-	return syscall.Kill(pid, 0) == nil
-}
 
 // RunKeeperPass executes a keeper pass protected by a lock file in stateDir.
 // If another pass is already running (lock held by a live process), it prints
