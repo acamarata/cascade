@@ -1938,5 +1938,635 @@
     "reason": "P2 lands internal/pbd/yamlstrict.LoadStrict before its caller; P2-GHELM-21b wires it. owner to confirm.",
     "retire_ticket": "P2-GHELM-21b",
     "symbol": "internal/pbd/yamlstrict.LoadStrict"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.AgentLogHook for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.AgentLogHook before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.AgentLogHook"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.AppendSpawn for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.AppendSpawn before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.AppendSpawn"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.AutoGuard for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.AutoGuard before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.AutoGuard"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.BuildQueuedBrief for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.BuildQueuedBrief before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.BuildQueuedBrief"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.CheckAgentOp for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.CheckAgentOp before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.CheckAgentOp"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.CheckBrief for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.CheckBrief before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.CheckBrief"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.CheckEgress for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.CheckEgress before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.CheckEgress"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.CheckWebchatQuery for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.CheckWebchatQuery before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.CheckWebchatQuery"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.CreateSwarmBranch for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.CreateSwarmBranch before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.CreateSwarmBranch"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.Decide for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.Decide before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.Decide"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.DefaultUIConfig for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.DefaultUIConfig before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.DefaultUIConfig"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.EmitStarvation for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.EmitStarvation before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.EmitStarvation"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.EnableManager for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.EnableManager before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.EnableManager"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ErrDuplicateRetryEntry for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ErrDuplicateRetryEntry before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ErrDuplicateRetryEntry"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.FrameMessage for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.FrameMessage before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.FrameMessage"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.GuardSilence for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.GuardSilence before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.GuardSilence"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.GuardState for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.GuardState before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.GuardState"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.HandleAutonomous for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.HandleAutonomous before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.HandleAutonomous"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.HandleAutonomousRoute for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.HandleAutonomousRoute before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.HandleAutonomousRoute"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.HandleBatch for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.HandleBatch before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.HandleBatch"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.HandleBoundary for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.HandleBoundary before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.HandleBoundary"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.JournalRetry for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.JournalRetry before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.JournalRetry"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.LockWriter for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.LockWriter before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.LockWriter"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.NewGuard for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.NewGuard before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.NewGuard"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.NewLedger for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.NewLedger before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.NewLedger"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.NewResolver for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.NewResolver before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.NewResolver"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.NewSlotRecoverer for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.NewSlotRecoverer before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.NewSlotRecoverer"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.NewStarveState for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.NewStarveState before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.NewStarveState"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.NewSubSend for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.NewSubSend before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.NewSubSend"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.OnEmptyBacklog for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.OnEmptyBacklog before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.OnEmptyBacklog"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ParseConfig for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ParseConfig before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ParseConfig"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ParseMessage for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ParseMessage before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ParseMessage"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ParseSubSpawnTrigger for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ParseSubSpawnTrigger before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ParseSubSpawnTrigger"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.PassLimit for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.PassLimit before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.PassLimit"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.PauseOnExit for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.PauseOnExit before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.PauseOnExit"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ProcessBatch for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ProcessBatch before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ProcessBatch"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ReadTrace for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ReadTrace before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ReadTrace"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.RecordStaleBinaryRelaunch for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.RecordStaleBinaryRelaunch before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.RecordStaleBinaryRelaunch"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.RefuseUnsure for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.RefuseUnsure before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.RefuseUnsure"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.RunKeeperPass for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.RunKeeperPass before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.RunKeeperPass"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.RunSwarmAttemptBrief for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.RunSwarmAttemptBrief before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.RunSwarmAttemptBrief"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.RunSwarmAttemptDone for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.RunSwarmAttemptDone before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.RunSwarmAttemptDone"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.RunWatchdog for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.RunWatchdog before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.RunWatchdog"
+  },
+  {
+    "caller_site": "internal/background/lower_fire.go",
+    "expected_caller": "The proposed integration in internal/background/lower_fire.go will reference internal/background.Schedule for standing-agent trigger admission before dispatch.",
+    "reason": "P2 lands internal/background.Schedule before its caller; P2-BGA-11 wires it.",
+    "retire_ticket": "P2-BGA-11",
+    "symbol": "internal/background.Schedule"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.Spawn for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.Spawn before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.Spawn"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.Submit for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.Submit before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.Submit"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.SubmitLaneName for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.SubmitLaneName before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.SubmitLaneName"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.SupervisorReview for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.SupervisorReview before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.SupervisorReview"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.SystemPrompt for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.SystemPrompt before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.SystemPrompt"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.ToolsPromptRunning for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.ToolsPromptRunning before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.ToolsPromptRunning"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.VerifyApprovalDigest for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.VerifyApprovalDigest before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.VerifyApprovalDigest"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.WorktreeArgs for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.WorktreeArgs before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.WorktreeArgs"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background.WriteEscalateNoop for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background.WriteEscalateNoop before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background.WriteEscalateNoop"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/doneopen.ResolveDoneOpen for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/doneopen.ResolveDoneOpen before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/doneopen.ResolveDoneOpen"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/doneopen.State for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/doneopen.State before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/doneopen.State"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/monitor.GapIncident for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/monitor.GapIncident before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/monitor.GapIncident"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/monitor.NewEmitter for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/monitor.NewEmitter before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/monitor.NewEmitter"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/nesting.NewLimiter for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/nesting.NewLimiter before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/nesting.NewLimiter"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/parenttasks.AssumeParents for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/parenttasks.AssumeParents before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/parenttasks.AssumeParents"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/statesave.Save for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/statesave.Save before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/statesave.Save"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/summaryrewrite.RewriteSummary for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/summaryrewrite.RewriteSummary before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/summaryrewrite.RewriteSummary"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/threadcmds.ErrNoThread for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/threadcmds.ErrNoThread before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/threadcmds.ErrNoThread"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/threadcmds.NewThreadCommands for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/threadcmds.NewThreadCommands before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/threadcmds.NewThreadCommands"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_bga.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_bga.go will reference internal/background/workerregistry.NewRegistry for background agent command composition and lifecycle dispatch.",
+    "reason": "P2 lands internal/background/workerregistry.NewRegistry before its caller; P2-WIRB-14 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-14",
+    "symbol": "internal/background/workerregistry.NewRegistry"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/attempt.NewOverflowSink for attempt-event sink construction and ticker lifecycle.",
+    "reason": "P2 lands internal/controlplane/attempt.NewOverflowSink before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/attempt.NewOverflowSink"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/decide.Decide for conductor rule verdict evaluation during ticks.",
+    "reason": "P2 lands internal/controlplane/decide.Decide before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/decide.Decide"
+  },
+  {
+    "caller_site": "internal/app/ops_conductor.go",
+    "expected_caller": "The proposed integration in internal/app/ops_conductor.go will reference internal/controlplane/read.GetLiveView for current conductor state presentation alongside agreement reports.",
+    "reason": "P2 lands internal/controlplane/read.GetLiveView before its caller; P2-COND-44 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-44",
+    "symbol": "internal/controlplane/read.GetLiveView"
+  },
+  {
+    "caller_site": "internal/controlplane/write/sys2.go",
+    "expected_caller": "The proposed integration in internal/controlplane/write/sys2.go will reference internal/controlplane/write.ApplyChange for orch.set configuration change reporting.",
+    "reason": "P2 lands internal/controlplane/write.ApplyChange before its caller; P2-GCOND-03 wires it.",
+    "retire_ticket": "P2-GCOND-03",
+    "symbol": "internal/controlplane/write.ApplyChange"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.Certify for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.Certify before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.Certify"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.CheckPhaseIdleWorkLeft for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.CheckPhaseIdleWorkLeft before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.CheckPhaseIdleWorkLeft"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.CheckStaleBinary for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.CheckStaleBinary before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.CheckStaleBinary"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.Confirm for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.Confirm before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.Confirm"
+  },
+  {
+    "caller_site": "internal/controlplane/tier/brief.go",
+    "expected_caller": "The proposed integration in internal/controlplane/tier/brief.go will reference internal/controlplane/write.InjectPrompt for date, finishing rule and source-limit injection into conductor briefs.",
+    "reason": "P2 lands internal/controlplane/write.InjectPrompt before its caller; P2-COND-17 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-17",
+    "symbol": "internal/controlplane/write.InjectPrompt"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.NewConductor for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.NewConductor before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.NewConductor"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.NewGreensLifecycle for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.NewGreensLifecycle before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.NewGreensLifecycle"
+  },
+  {
+    "caller_site": "internal/controlplane/ingest/ingest.go",
+    "expected_caller": "The proposed integration in internal/controlplane/ingest/ingest.go will reference internal/controlplane/write.ParseTicketYAML for ticket row parsing during plan ingestion.",
+    "reason": "P2 lands internal/controlplane/write.ParseTicketYAML before its caller; P2-COND-05c wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-05c",
+    "symbol": "internal/controlplane/write.ParseTicketYAML"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.Recommend for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.Recommend before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.Recommend"
+  },
+  {
+    "caller_site": "internal/supervise/stop.go",
+    "expected_caller": "The proposed integration in internal/supervise/stop.go will reference internal/controlplane/write.RecordOwnerRestart for restart configuration validation and owner/process restart audit recording.",
+    "reason": "P2 lands internal/controlplane/write.RecordOwnerRestart before its caller; P2-COP-30 wires it. owner to confirm.",
+    "retire_ticket": "P2-COP-30",
+    "symbol": "internal/controlplane/write.RecordOwnerRestart"
+  },
+  {
+    "caller_site": "internal/supervise/stop.go",
+    "expected_caller": "The proposed integration in internal/supervise/stop.go will reference internal/controlplane/write.RecordProcessRestart for restart configuration validation and owner/process restart audit recording.",
+    "reason": "P2 lands internal/controlplane/write.RecordProcessRestart before its caller; P2-COP-30 wires it. owner to confirm.",
+    "retire_ticket": "P2-COP-30",
+    "symbol": "internal/controlplane/write.RecordProcessRestart"
+  },
+  {
+    "caller_site": "internal/controlplane/reconcile/tick.go",
+    "expected_caller": "The proposed integration in internal/controlplane/reconcile/tick.go will reference internal/controlplane/write.Revalidate for stale-state revalidation and scheduled index-event recording during reconciliation.",
+    "reason": "P2 lands internal/controlplane/write.Revalidate before its caller; P2-COND-24 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-24",
+    "symbol": "internal/controlplane/write.Revalidate"
+  },
+  {
+    "caller_site": "internal/app/ops_conductor.go",
+    "expected_caller": "The proposed integration in internal/app/ops_conductor.go will reference internal/controlplane/write.Route for conductor operation dispatch and gate/terminal response handling.",
+    "reason": "P2 lands internal/controlplane/write.Route before its caller; P2-COND-44 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-44",
+    "symbol": "internal/controlplane/write.Route"
+  },
+  {
+    "caller_site": "internal/app/ops_conductor.go",
+    "expected_caller": "The proposed integration in internal/app/ops_conductor.go will reference internal/controlplane/write.RunGate for conductor operation dispatch and gate/terminal response handling.",
+    "reason": "P2 lands internal/controlplane/write.RunGate before its caller; P2-COND-44 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-44",
+    "symbol": "internal/controlplane/write.RunGate"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.RunGreens for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.RunGreens before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.RunGreens"
+  },
+  {
+    "caller_site": "internal/app/ops_conductor.go",
+    "expected_caller": "The proposed integration in internal/app/ops_conductor.go will reference internal/controlplane/write.RunStop for conductor operation dispatch and gate/terminal response handling.",
+    "reason": "P2 lands internal/controlplane/write.RunStop before its caller; P2-COND-44 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-44",
+    "symbol": "internal/controlplane/write.RunStop"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.StaleBinaryFinding for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.StaleBinaryFinding before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.StaleBinaryFinding"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.StartWindow for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.StartWindow before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.StartWindow"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.TickGreens for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.TickGreens before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.TickGreens"
+  },
+  {
+    "caller_site": "internal/app/conductor_tick.go",
+    "expected_caller": "The proposed integration in internal/app/conductor_tick.go will reference internal/controlplane/write.ValidatePhaseGap for conductor policy, certification, findings and greens lifecycle orchestration.",
+    "reason": "P2 lands internal/controlplane/write.ValidatePhaseGap before its caller; P2-COND-37 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-37",
+    "symbol": "internal/controlplane/write.ValidatePhaseGap"
+  },
+  {
+    "caller_site": "internal/supervise/stop.go",
+    "expected_caller": "The proposed integration in internal/supervise/stop.go will reference internal/controlplane/write.ValidateRunConfig for restart configuration validation and owner/process restart audit recording.",
+    "reason": "P2 lands internal/controlplane/write.ValidateRunConfig before its caller; P2-COP-30 wires it. owner to confirm.",
+    "retire_ticket": "P2-COP-30",
+    "symbol": "internal/controlplane/write.ValidateRunConfig"
+  },
+  {
+    "caller_site": "internal/controlplane/reconcile/tick.go",
+    "expected_caller": "The proposed integration in internal/controlplane/reconcile/tick.go will reference internal/controlplane/write.WriteScheduledIndexEvent for stale-state revalidation and scheduled index-event recording during reconciliation.",
+    "reason": "P2 lands internal/controlplane/write.WriteScheduledIndexEvent before its caller; P2-COND-24 wires it. owner to confirm.",
+    "retire_ticket": "P2-COND-24",
+    "symbol": "internal/controlplane/write.WriteScheduledIndexEvent"
   }
 ]
