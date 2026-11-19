@@ -71,5 +71,9 @@ func FilterAdditions(adds []Addition, budgetTokens int, minRelevance float64) ([
 		}
 	}
 
+	if len(result) == 0 {
+		return nil, nil
+	}
+
 	return result, nil
 }
