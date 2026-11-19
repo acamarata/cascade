@@ -6,6 +6,8 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+
+	"github.com/acamarata/cascade/internal/runtime"
 )
 
 // ErrMissingSource indicates the repository CLAUDE.md file does not exist.
@@ -33,7 +35,7 @@ func MountClaudeMD(repoFile string, threadDirs []string) error {
 		}
 
 		target := filepath.Join(dir, "CLAUDE.md")
-		if err := os.WriteFile(target, data, 0644); err != nil {
+		if err := runtime.WriteFileAtomic(target, data, 0o644); err != nil {
 			return fmt.Errorf("write %s: %w", target, err)
 		}
 	}

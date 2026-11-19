@@ -1,12 +1,6 @@
 // Package graph provides node graph management and transport selection.
 package graph
 
-// Transport represents a nodelink transport mechanism.
-type Transport interface {
-	// Available reports whether the transport is currently usable.
-	Available() bool
-}
-
 // SSHTransport represents the SSH nodelink transport.
 type SSHTransport struct{}
 

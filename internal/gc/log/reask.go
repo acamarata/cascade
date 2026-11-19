@@ -31,12 +31,6 @@ type TurnResult struct {
 	Err error
 }
 
-// PlainProseNote is the default instruction appended to reask prompts.
-const PlainProseNote = "Please answer in plain prose without encoded or high-entropy content."
-
-// MaxReasks is the maximum number of additional attempts allowed after an initial failure.
-const MaxReasks = 2
-
 // ErrInvalidTurn is returned when a nil TurnFunc is provided to Reask.
 var ErrInvalidTurn = errors.New("invalid turn")
 

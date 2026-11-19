@@ -54,6 +54,7 @@ var EgressNetNotYetMigrated = []EgressAllowEntry{
 	{"internal/providers/agents", "The hook relay dials only the unix socket the driver announced for one spawn (a local callback channel, no remote host); the relay never posts to the daemon RPC socket"},
 	{"internal/elevation", "P1-SHIP-15: listens on a unix socket in a fresh 0700 directory that only the verified elevation helper child connects to; local transport, not egress"},
 	{"cmd/cascade-elevate-helper", "P1-SHIP-15: the elevation helper dials the unix socket path cascade names on its gate descriptor; local transport, not egress"},
+	{"internal/pbd/api", "Address parsing only (net.SplitHostPort in addr.go); opens no connection"},
 }
 
 // EgressExecNormative is the set the ruling names as permitted importers

@@ -1,7 +1,5 @@
 package swarm
 
-import "errors"
-
 // SplitPass is a function called between autonomy rounds.
 type SplitPass func() (int, error)
 
@@ -27,6 +25,3 @@ func RunRounds(rounds int, round func(i int) error, split SplitPass, ladder *Lad
 	}
 	return nil
 }
-
-// ErrSplit is returned when a split pass fails.
-var ErrSplit = errors.New("split error")

@@ -2,61 +2,8 @@ package yamlstrict
 
 import (
 	"errors"
-	"fmt"
 	"testing"
-
-	"gopkg.in/yaml.v3"
 )
-
-// ErrDuplicateKey is returned when a YAML mapping contains duplicate keys.
-var ErrDuplicateKey = errors.New("duplicate key")
-
-// ErrInvalidYAMLInput is returned when the kind is unknown or input is invalid.
-var ErrInvalidYAMLInput = errors.New("invalid YAML input")
-
-// LoadStrict parses YAML data for the given kind into out, rejecting duplicate keys.
-// Implementation provided here to satisfy test harness before parent ticket lands.
-func LoadStrict(kind string, data []byte, out any) error {
-	switch kind {
-	case "epic", "sport":
-	default:
-		return fmt.Errorf("%w: unknown kind %q", ErrInvalidYAMLInput, kind)
-	}
-
-	var node yaml.Node
-	if err := yaml.Unmarshal(data, &node); err != nil {
-		return fmt.Errorf("%w: %v", ErrInvalidYAMLInput, err)
-	}
-
-	if err := checkDuplicateKeys(&node); err != nil {
-		return err
-	}
-
-	return yaml.Unmarshal(data, out)
-}
-
-// checkDuplicateKeys recursively checks a yaml.Node tree for duplicate mapping keys.
-func checkDuplicateKeys(node *yaml.Node) error {
-	if node == nil {
-		return nil
-	}
-	if node.Kind == yaml.MappingNode {
-		seen := make(map[string]bool)
-		for i := 0; i < len(node.Content)-1; i += 2 {
-			key := node.Content[i].Value
-			if seen[key] {
-				return fmt.Errorf("%w: %s", ErrDuplicateKey, key)
-			}
-			seen[key] = true
-		}
-	}
-	for _, child := range node.Content {
-		if err := checkDuplicateKeys(child); err != nil {
-			return err
-		}
-	}
-	return nil
-}
 
 // TestRejectsDuplicateEpicKey verifies that LoadStrict returns ErrDuplicateKey
 // when parsing epic YAML with duplicate keys and leaves prefilled destinations unchanged.

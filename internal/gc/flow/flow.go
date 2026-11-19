@@ -42,8 +42,6 @@ type EventKind string
 const (
 	// Start begins the machine.
 	Start EventKind = "start"
-	// Tick advances time.
-	Tick EventKind = "tick"
 	// Finish completes the machine.
 	Finish EventKind = "finish"
 )

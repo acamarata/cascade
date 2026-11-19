@@ -36,6 +36,7 @@ var EgressNetPurpose = map[string]string{
 	"internal/providers/agents":             PurposeLocalTransport,
 	"internal/elevation":                    PurposeLocalTransport,
 	"cmd/cascade-elevate-helper":            PurposeLocalTransport,
+	"internal/pbd/api":                      PurposeTypeOnly,
 	// The gateway owner registers this class when its importer lands.
 	"internal/providers/gateway": "provider-usage",
 }
