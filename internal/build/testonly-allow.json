@@ -1420,5 +1420,523 @@
     "reason": "P1-TOP-02b ships EvidenceCredentialGate with its tests. A CredentialGate binds only where a Chooser is built, and no production NewChooser caller exists yet (NewChooser is itself allow-listed to P1-TOP-11); P1-TOP-02e's write_scope has no chooser file, so the gate binds with the Chooser's own composition.",
     "retire_ticket": "P1-TOP-11",
     "symbol": "internal/fleet/topology.EvidenceCredentialGate"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.AssembleGCIBlock for consultation routing.",
+    "reason": "P2 lands internal/consult.AssembleGCIBlock before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.AssembleGCIBlock"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.BuildPlanningBrief for consultation routing.",
+    "reason": "P2 lands internal/consult.BuildPlanningBrief before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.BuildPlanningBrief"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.CheckAccess for consultation routing.",
+    "reason": "P2 lands internal/consult.CheckAccess before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.CheckAccess"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.EvaluateLadder for consultation routing.",
+    "reason": "P2 lands internal/consult.EvaluateLadder before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.EvaluateLadder"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.FilterAdditions for consultation routing.",
+    "reason": "P2 lands internal/consult.FilterAdditions before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.FilterAdditions"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.FrontRolePrompt for consultation routing.",
+    "reason": "P2 lands internal/consult.FrontRolePrompt before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.FrontRolePrompt"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.GateModel for consultation routing.",
+    "reason": "P2 lands internal/consult.GateModel before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.GateModel"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.HoldsDecision for consultation routing.",
+    "reason": "P2 lands internal/consult.HoldsDecision before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.HoldsDecision"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.LoadRolePrompt for consultation routing.",
+    "reason": "P2 lands internal/consult.LoadRolePrompt before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.LoadRolePrompt"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.LoadScopedSections for consultation routing.",
+    "reason": "P2 lands internal/consult.LoadScopedSections before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.LoadScopedSections"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.NewChooser for consultation routing.",
+    "reason": "P2 lands internal/consult.NewChooser before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.NewChooser"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.RouteT0Plan for consultation routing.",
+    "reason": "P2 lands internal/consult.RouteT0Plan before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.RouteT0Plan"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.RunLadder for consultation routing.",
+    "reason": "P2 lands internal/consult.RunLadder before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.RunLadder"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.RunPromptPhases for consultation routing.",
+    "reason": "P2 lands internal/consult.RunPromptPhases before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.RunPromptPhases"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.ShouldRotate for consultation routing.",
+    "reason": "P2 lands internal/consult.ShouldRotate before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.ShouldRotate"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.SubChatPrompt for consultation routing.",
+    "reason": "P2 lands internal/consult.SubChatPrompt before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.SubChatPrompt"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.UnmarshalContextMemory for consultation routing.",
+    "reason": "P2 lands internal/consult.UnmarshalContextMemory before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.UnmarshalContextMemory"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.ValidateModelName for consultation routing.",
+    "reason": "P2 lands internal/consult.ValidateModelName before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.ValidateModelName"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.ValidateNativeTokenUse for consultation routing.",
+    "reason": "P2 lands internal/consult.ValidateNativeTokenUse before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.ValidateNativeTokenUse"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/consult.ValidatePrompt for consultation routing.",
+    "reason": "P2 lands internal/consult.ValidatePrompt before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/consult.ValidatePrompt"
+  },
+  {
+    "caller_site": "internal/consult/policy/keys.go",
+    "expected_caller": "The proposed integration in internal/consult/policy/keys.go will call internal/consult.ValidateWorkClass for consultation task-class validation.",
+    "reason": "P2 lands internal/consult.ValidateWorkClass before its caller; P2-CNS-09 wires it. owner to confirm.",
+    "retire_ticket": "P2-CNS-09",
+    "symbol": "internal/consult.ValidateWorkClass"
+  },
+  {
+    "caller_site": "internal/fleet/hygiene/gaterun.go",
+    "expected_caller": "The proposed integration in internal/fleet/hygiene/gaterun.go will call internal/fleet/hygiene.CanDropLogs for gate cleanup log-retention checks.",
+    "reason": "P2 lands internal/fleet/hygiene.CanDropLogs before its caller; P2-GHYG-10 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHYG-10",
+    "symbol": "internal/fleet/hygiene.CanDropLogs"
+  },
+  {
+    "caller_site": "internal/hj/brokers_lock.go",
+    "expected_caller": "The proposed integration in internal/hj/brokers_lock.go will call internal/gc/flow.New for serialized GC lifecycle initialization.",
+    "reason": "P2 lands internal/gc/flow.New before its caller; P2-GHJ-05 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-05",
+    "symbol": "internal/gc/flow.New"
+  },
+  {
+    "caller_site": "internal/consult/service.go",
+    "expected_caller": "The proposed integration in internal/consult/service.go will call internal/gc/lessons.New for consultation lessons-pipeline initialization.",
+    "reason": "P2 lands internal/gc/lessons.New before its caller; P2-APP-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-APP-06",
+    "symbol": "internal/gc/lessons.New"
+  },
+  {
+    "caller_site": "internal/hj/brokers_lock.go",
+    "expected_caller": "The proposed integration in internal/hj/brokers_lock.go will call internal/gc/limiter.New for serialized GC rate-limiter initialization.",
+    "reason": "P2 lands internal/gc/limiter.New before its caller; P2-GHJ-05 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-05",
+    "symbol": "internal/gc/limiter.New"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_gcl.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_gcl.go will call internal/gc/log.FlowRun for GC command orchestration.",
+    "reason": "P2 lands internal/gc/log.FlowRun before its caller; P2-WIRB-36 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-36",
+    "symbol": "internal/gc/log.FlowRun"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_gcl.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_gcl.go will call internal/gc/log.NewRateTracker for GC command orchestration.",
+    "reason": "P2 lands internal/gc/log.NewRateTracker before its caller; P2-WIRB-36 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-36",
+    "symbol": "internal/gc/log.NewRateTracker"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_gcl.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_gcl.go will call internal/gc/log.NewRunID for GC command orchestration.",
+    "reason": "P2 lands internal/gc/log.NewRunID before its caller; P2-WIRB-36 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-36",
+    "symbol": "internal/gc/log.NewRunID"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_gcl.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_gcl.go will call internal/gc/log.NewSink for GC command orchestration.",
+    "reason": "P2 lands internal/gc/log.NewSink before its caller; P2-WIRB-36 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-36",
+    "symbol": "internal/gc/log.NewSink"
+  },
+  {
+    "caller_site": "cmd/cascade/wire_units_gcl.go",
+    "expected_caller": "The proposed integration in cmd/cascade/wire_units_gcl.go will call internal/gc/log.Reask for GC command orchestration.",
+    "reason": "P2 lands internal/gc/log.Reask before its caller; P2-WIRB-36 wires it. owner to confirm.",
+    "retire_ticket": "P2-WIRB-36",
+    "symbol": "internal/gc/log.Reask"
+  },
+  {
+    "caller_site": "internal/hj/admission_gate.go",
+    "expected_caller": "The proposed integration in internal/hj/admission_gate.go will call internal/hj.Admit for job budget admission.",
+    "reason": "P2 lands internal/hj.Admit before its caller; P2-GHJ-09 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-09",
+    "symbol": "internal/hj.Admit"
+  },
+  {
+    "caller_site": "internal/hj/substitute_clear.go",
+    "expected_caller": "The proposed integration in internal/hj/substitute_clear.go will call internal/hj.ClearSubstitute for job rerouting cleanup.",
+    "reason": "P2 lands internal/hj.ClearSubstitute before its caller; P2-GHJ-08 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-08",
+    "symbol": "internal/hj.ClearSubstitute"
+  },
+  {
+    "caller_site": "internal/hj/exit3.go",
+    "expected_caller": "The proposed integration in internal/hj/exit3.go will call internal/hj.HandleExit3 for exit-code routing.",
+    "reason": "P2 lands internal/hj.HandleExit3 before its caller; P2-GHJ-02 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-02",
+    "symbol": "internal/hj.HandleExit3"
+  },
+  {
+    "caller_site": "internal/hj/scan.go",
+    "expected_caller": "The proposed integration in internal/hj/scan.go will call internal/hj.NewBrokers for broker startup.",
+    "reason": "P2 lands internal/hj.NewBrokers before its caller; P2-GHJ-04 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-04",
+    "symbol": "internal/hj.NewBrokers"
+  },
+  {
+    "caller_site": "internal/hj/reconcile.go",
+    "expected_caller": "The proposed integration in internal/hj/reconcile.go will call internal/hj.Persist for offer lifecycle reconciliation.",
+    "reason": "P2 lands internal/hj.Persist before its caller; P2-GHJ-01 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-01",
+    "symbol": "internal/hj.Persist"
+  },
+  {
+    "caller_site": "internal/hj/migrate.go",
+    "expected_caller": "The proposed integration in internal/hj/migrate.go will call internal/hj.Rebalance for queued-task migration.",
+    "reason": "P2 lands internal/hj.Rebalance before its caller; P2-GHJ-10 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-10",
+    "symbol": "internal/hj.Rebalance"
+  },
+  {
+    "caller_site": "internal/hj/reconcile.go",
+    "expected_caller": "The proposed integration in internal/hj/reconcile.go will call internal/hj.Receipts for offer lifecycle reconciliation.",
+    "reason": "P2 lands internal/hj.Receipts before its caller; P2-GHJ-01 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-01",
+    "symbol": "internal/hj.Receipts"
+  },
+  {
+    "caller_site": "internal/hj/reconcile.go",
+    "expected_caller": "The proposed integration in internal/hj/reconcile.go will call internal/hj.Reconcile for offer lifecycle reconciliation.",
+    "reason": "P2 lands internal/hj.Reconcile before its caller; P2-GHJ-01 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHJ-01",
+    "symbol": "internal/hj.Reconcile"
+  },
+  {
+    "caller_site": "internal/mod/notesshare.go",
+    "expected_caller": "The proposed integration in internal/mod/notesshare.go will call internal/mod.ApplyNotesShare for notes-share frontmatter persistence.",
+    "reason": "P2 lands internal/mod.ApplyNotesShare before its caller; P2-GMOD-01 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-01",
+    "symbol": "internal/mod.ApplyNotesShare"
+  },
+  {
+    "caller_site": "internal/mod/intakeleaf.go",
+    "expected_caller": "The proposed integration in internal/mod/intakeleaf.go will call internal/mod.CheckBinaryDeps for binary import-boundary validation.",
+    "reason": "P2 lands internal/mod.CheckBinaryDeps before its caller; P2-GMOD-08 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-08",
+    "symbol": "internal/mod.CheckBinaryDeps"
+  },
+  {
+    "caller_site": "internal/mod/storecheck.go",
+    "expected_caller": "The proposed integration in internal/mod/storecheck.go will call internal/mod.CheckLanding for module-store completeness validation.",
+    "reason": "P2 lands internal/mod.CheckLanding before its caller; P2-GMOD-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-06",
+    "symbol": "internal/mod.CheckLanding"
+  },
+  {
+    "caller_site": "internal/mod/storecheck.go",
+    "expected_caller": "The proposed integration in internal/mod/storecheck.go will call internal/mod.CheckModuleNames for module-store completeness validation.",
+    "reason": "P2 lands internal/mod.CheckModuleNames before its caller; P2-GMOD-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-06",
+    "symbol": "internal/mod.CheckModuleNames"
+  },
+  {
+    "caller_site": "internal/mod/rules.go",
+    "expected_caller": "The proposed integration in internal/mod/rules.go will call internal/mod.CheckNoGithubAIPrefix for workspace rule initialization.",
+    "reason": "P2 lands internal/mod.CheckNoGithubAIPrefix before its caller; P2-GMOD-07 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-07",
+    "symbol": "internal/mod.CheckNoGithubAIPrefix"
+  },
+  {
+    "caller_site": "internal/mod/storecheck.go",
+    "expected_caller": "The proposed integration in internal/mod/storecheck.go will call internal/mod.CheckStoreCompleteness for module-store completeness validation.",
+    "reason": "P2 lands internal/mod.CheckStoreCompleteness before its caller; P2-GMOD-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-06",
+    "symbol": "internal/mod.CheckStoreCompleteness"
+  },
+  {
+    "caller_site": "internal/mod/legacyci.go",
+    "expected_caller": "The proposed integration in internal/mod/legacyci.go will call internal/mod.CoreMembers for legacy core-module protection.",
+    "reason": "P2 lands internal/mod.CoreMembers before its caller; P2-GMOD-13 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-13",
+    "symbol": "internal/mod.CoreMembers"
+  },
+  {
+    "caller_site": "internal/mod/railpanels.go",
+    "expected_caller": "The proposed integration in internal/mod/railpanels.go will reference internal/mod.ErrNoPlan for plan-backed rail panel loading.",
+    "reason": "P2 lands internal/mod.ErrNoPlan before its caller; P2-GMOD-11 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-11",
+    "symbol": "internal/mod.ErrNoPlan"
+  },
+  {
+    "caller_site": "internal/mod/legacyci.go",
+    "expected_caller": "The proposed integration in internal/mod/legacyci.go will call internal/mod.IsCore for legacy core-module protection.",
+    "reason": "P2 lands internal/mod.IsCore before its caller; P2-GMOD-13 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-13",
+    "symbol": "internal/mod.IsCore"
+  },
+  {
+    "caller_site": "internal/mod/rules.go",
+    "expected_caller": "The proposed integration in internal/mod/rules.go will call internal/mod.LanePath for workspace rule initialization.",
+    "reason": "P2 lands internal/mod.LanePath before its caller; P2-GMOD-07 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-07",
+    "symbol": "internal/mod.LanePath"
+  },
+  {
+    "caller_site": "internal/mod/rules.go",
+    "expected_caller": "The proposed integration in internal/mod/rules.go will call internal/mod.LoadRules for workspace rule initialization.",
+    "reason": "P2 lands internal/mod.LoadRules before its caller; P2-GMOD-07 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-07",
+    "symbol": "internal/mod.LoadRules"
+  },
+  {
+    "caller_site": "internal/mod/rules.go",
+    "expected_caller": "The proposed integration in internal/mod/rules.go will call internal/mod.MountClaudeMD for workspace rule initialization.",
+    "reason": "P2 lands internal/mod.MountClaudeMD before its caller; P2-GMOD-07 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-07",
+    "symbol": "internal/mod.MountClaudeMD"
+  },
+  {
+    "caller_site": "internal/mod/rules.go",
+    "expected_caller": "The proposed integration in internal/mod/rules.go will call internal/mod.NewHookPack for workspace rule initialization.",
+    "reason": "P2 lands internal/mod.NewHookPack before its caller; P2-GMOD-07 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-07",
+    "symbol": "internal/mod.NewHookPack"
+  },
+  {
+    "caller_site": "internal/mod/railpanels.go",
+    "expected_caller": "The proposed integration in internal/mod/railpanels.go will call internal/mod.NewPlanModel for plan-backed rail panel loading.",
+    "reason": "P2 lands internal/mod.NewPlanModel before its caller; P2-GMOD-11 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-11",
+    "symbol": "internal/mod.NewPlanModel"
+  },
+  {
+    "caller_site": "internal/mod/usagepaths.go",
+    "expected_caller": "The proposed integration in internal/mod/usagepaths.go will call internal/mod.NewRegistry for module usage-cache path registration.",
+    "reason": "P2 lands internal/mod.NewRegistry before its caller; P2-GMOD-03 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-03",
+    "symbol": "internal/mod.NewRegistry"
+  },
+  {
+    "caller_site": "internal/mod/intakeleaf.go",
+    "expected_caller": "The proposed integration in internal/mod/intakeleaf.go will call internal/mod.PlatformTargets for binary import-boundary validation.",
+    "reason": "P2 lands internal/mod.PlatformTargets before its caller; P2-GMOD-08 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-08",
+    "symbol": "internal/mod.PlatformTargets"
+  },
+  {
+    "caller_site": "internal/mod/legacyci.go",
+    "expected_caller": "The proposed integration in internal/mod/legacyci.go will call internal/mod.RegisterPlugin for legacy core-module protection.",
+    "reason": "P2 lands internal/mod.RegisterPlugin before its caller; P2-GMOD-13 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-13",
+    "symbol": "internal/mod.RegisterPlugin"
+  },
+  {
+    "caller_site": "internal/mod/railpanels.go",
+    "expected_caller": "The proposed integration in internal/mod/railpanels.go will call internal/mod.ValidatePrefixes for plan-backed rail panel loading.",
+    "reason": "P2 lands internal/mod.ValidatePrefixes before its caller; P2-GMOD-11 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-11",
+    "symbol": "internal/mod.ValidatePrefixes"
+  },
+  {
+    "caller_site": "internal/mod/budget/budget.go",
+    "expected_caller": "The proposed integration in internal/mod/budget/budget.go will call internal/mod/budget.New for Accept and shapes module budget initialization.",
+    "reason": "P2 lands internal/mod/budget.New before its caller; P2-GMOD-22 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-22",
+    "symbol": "internal/mod/budget.New"
+  },
+  {
+    "caller_site": "internal/mod/modname/modname.go",
+    "expected_caller": "The proposed integration in internal/mod/modname/modname.go will call internal/mod/modname.Validate for module registration validation.",
+    "reason": "P2 lands internal/mod/modname.Validate before its caller; P2-GMOD-25 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-25",
+    "symbol": "internal/mod/modname.Validate"
+  },
+  {
+    "caller_site": "internal/mod/recallinject/recall.go",
+    "expected_caller": "The proposed integration in internal/mod/recallinject/recall.go will call internal/mod/recallinject.NewRecall for recall archive-classifier initialization.",
+    "reason": "P2 lands internal/mod/recallinject.NewRecall before its caller; P2-GMOD-30 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-30",
+    "symbol": "internal/mod/recallinject.NewRecall"
+  },
+  {
+    "caller_site": "internal/mod/redactnames/names.go",
+    "expected_caller": "The proposed integration in internal/mod/redactnames/names.go will call internal/mod/redactnames.Check for Redact export-name contract validation.",
+    "reason": "P2 lands internal/mod/redactnames.Check before its caller; P2-GMOD-23 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-23",
+    "symbol": "internal/mod/redactnames.Check"
+  },
+  {
+    "caller_site": "internal/mod/redactnames/names.go",
+    "expected_caller": "The proposed integration in internal/mod/redactnames/names.go will call internal/mod/redactnames.Names for Redact export-name contract validation.",
+    "reason": "P2 lands internal/mod/redactnames.Names before its caller; P2-GMOD-23 wires it. owner to confirm.",
+    "retire_ticket": "P2-GMOD-23",
+    "symbol": "internal/mod/redactnames.Names"
+  },
+  {
+    "caller_site": "internal/nodes/graph/status_payload.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/status_payload.go will call internal/nodes/graph.BuildFeedEntry for node status construction.",
+    "reason": "P2 lands internal/nodes/graph.BuildFeedEntry before its caller; P2-GNOD-12 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-12",
+    "symbol": "internal/nodes/graph.BuildFeedEntry"
+  },
+  {
+    "caller_site": "internal/nodes/graph/coverage_floor.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/coverage_floor.go will call internal/nodes/graph.CheckCoverageFloor for node coverage enforcement.",
+    "reason": "P2 lands internal/nodes/graph.CheckCoverageFloor before its caller; P2-GNOD-09 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-09",
+    "symbol": "internal/nodes/graph.CheckCoverageFloor"
+  },
+  {
+    "caller_site": "internal/nodes/graph/ready.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/ready.go will call internal/nodes/graph.DeviceReady for node readiness evaluation.",
+    "reason": "P2 lands internal/nodes/graph.DeviceReady before its caller; P2-GNOD-06 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-06",
+    "symbol": "internal/nodes/graph.DeviceReady"
+  },
+  {
+    "caller_site": "internal/nodes/graph/resolve.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/resolve.go will call internal/nodes/graph.NeedsHost for runner-node resolution.",
+    "reason": "P2 lands internal/nodes/graph.NeedsHost before its caller; P2-GNOD-03 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-03",
+    "symbol": "internal/nodes/graph.NeedsHost"
+  },
+  {
+    "caller_site": "internal/nodes/graph/resolve.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/resolve.go will call internal/nodes/graph.Schedulable for runner-node resolution.",
+    "reason": "P2 lands internal/nodes/graph.Schedulable before its caller; P2-GNOD-03 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-03",
+    "symbol": "internal/nodes/graph.Schedulable"
+  },
+  {
+    "caller_site": "internal/nodes/graph/transport.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/transport.go will call internal/nodes/graph.SelectTransport for nodelink transport selection.",
+    "reason": "P2 lands internal/nodes/graph.SelectTransport before its caller; P2-GNOD-08 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-08",
+    "symbol": "internal/nodes/graph.SelectTransport"
+  },
+  {
+    "caller_site": "internal/nodes/graph/status_payload.go",
+    "expected_caller": "The proposed integration in internal/nodes/graph/status_payload.go will call internal/nodes/graph.VerdictFresh for node status construction.",
+    "reason": "P2 lands internal/nodes/graph.VerdictFresh before its caller; P2-GNOD-12 wires it. owner to confirm.",
+    "retire_ticket": "P2-GNOD-12",
+    "symbol": "internal/nodes/graph.VerdictFresh"
+  },
+  {
+    "caller_site": "internal/pbd/api/addr.go",
+    "expected_caller": "The proposed integration in internal/pbd/api/addr.go will reference internal/pbd/api.DefaultAddr for API loopback listener initialization.",
+    "reason": "P2 lands internal/pbd/api.DefaultAddr before its caller; P2-GHELM-15 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHELM-15",
+    "symbol": "internal/pbd/api.DefaultAddr"
+  },
+  {
+    "caller_site": "internal/pbd/api/addr.go",
+    "expected_caller": "The proposed integration in internal/pbd/api/addr.go will call internal/pbd/api.ValidateAddr for API loopback listener initialization.",
+    "reason": "P2 lands internal/pbd/api.ValidateAddr before its caller; P2-GHELM-15 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHELM-15",
+    "symbol": "internal/pbd/api.ValidateAddr"
+  },
+  {
+    "caller_site": "internal/pbd/helm/detcheck.go",
+    "expected_caller": "The proposed integration in internal/pbd/helm/detcheck.go will call internal/pbd/helm.CheckDeterministic for deterministic source enforcement.",
+    "reason": "P2 lands internal/pbd/helm.CheckDeterministic before its caller; P2-GHELM-08 wires it. owner to confirm.",
+    "retire_ticket": "P2-GHELM-08",
+    "symbol": "internal/pbd/helm.CheckDeterministic"
+  },
+  {
+    "caller_site": "internal/pbd/swarm/reduce.go",
+    "expected_caller": "The proposed integration in internal/pbd/swarm/reduce.go will call internal/pbd/swarm.RunRounds for bounded reduction rounds.",
+    "reason": "P2 lands internal/pbd/swarm.RunRounds before its caller; P2-CPAR-09 wires it. owner to confirm.",
+    "retire_ticket": "P2-CPAR-09",
+    "symbol": "internal/pbd/swarm.RunRounds"
+  },
+  {
+    "caller_site": "internal/pbd/yamlstrict/strict_dup.go",
+    "expected_caller": "The proposed integration in internal/pbd/yamlstrict/strict_dup.go will call internal/pbd/yamlstrict.CheckDuplicateKeys for strict YAML document loading.",
+    "reason": "P2 lands internal/pbd/yamlstrict.CheckDuplicateKeys before its caller; P2-GHELM-21b wires it. owner to confirm.",
+    "retire_ticket": "P2-GHELM-21b",
+    "symbol": "internal/pbd/yamlstrict.CheckDuplicateKeys"
+  },
+  {
+    "caller_site": "internal/pbd/yamlstrict/strict_dup.go",
+    "expected_caller": "The proposed integration in internal/pbd/yamlstrict/strict_dup.go will call internal/pbd/yamlstrict.LoadStrict for strict YAML document loading.",
+    "reason": "P2 lands internal/pbd/yamlstrict.LoadStrict before its caller; P2-GHELM-21b wires it. owner to confirm.",
+    "retire_ticket": "P2-GHELM-21b",
+    "symbol": "internal/pbd/yamlstrict.LoadStrict"
   }
 ]
