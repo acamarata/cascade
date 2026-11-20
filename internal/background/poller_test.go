@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -21,11 +22,11 @@ func (f *fakeClock) NewTicker(d time.Duration) (<-chan time.Time, func()) {
 }
 
 type fakeReader struct {
-	calls int
+	calls atomic.Int64
 }
 
 func (f *fakeReader) ReadNode(ctx context.Context, nodeID, pos string) (string, error) {
-	f.calls++
+	f.calls.Add(1)
 	return "v", nil
 }
 
@@ -36,11 +37,11 @@ func (e *errReader) ReadNode(ctx context.Context, nodeID, pos string) (string, e
 }
 
 type fakeReporter struct {
-	calls int
+	calls atomic.Int64
 }
 
 func (f *fakeReporter) Unreadable(nodeID string, err error) {
-	f.calls++
+	f.calls.Add(1)
 }
 
 // TestPollInterval verifies ticker lifecycle and polling cycles.
@@ -64,8 +65,8 @@ func TestPollInterval(t *testing.T) {
 		clk.ch <- time.Now().Add(30 * time.Second)
 
 		time.Sleep(50 * time.Millisecond)
-		if rdr.calls != 3 {
-			t.Fatalf("expected 3 reads, got %d", rdr.calls)
+		if rdr.calls.Load() != 3 {
+			t.Fatalf("expected 3 reads, got %d", rdr.calls.Load())
 		}
 		close(clk.ch)
 		code := <-done
@@ -162,10 +163,10 @@ func TestPollInvalidConfiguration(t *testing.T) {
 			Positions: map[string]string{"x": "y"},
 		}
 		p.Run(context.Background())
-		if rdr.calls != 0 {
+		if rdr.calls.Load() != 0 {
 			t.Fatal("reader should not be called")
 		}
-		if rpt.calls != 0 {
+		if rpt.calls.Load() != 0 {
 			t.Fatal("reporter should not be called")
 		}
 		if v, ok := p.Positions["x"]; !ok || v != "y" {

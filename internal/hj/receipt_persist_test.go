@@ -82,13 +82,15 @@ func TestPersistTurnEndedState(t *testing.T) {
 func TestPersistOtherStates(t *testing.T) {
 	states := []ReceiptState{End, Ready, Due, For, CountsFor, Prune}
 	expectedIDs := make(map[string]bool)
+	for _, st := range states {
+		expectedIDs["test-persist-other-"+string(st)] = true
+	}
 	var wg sync.WaitGroup
 	for _, st := range states {
 		wg.Add(1)
 		go func(st ReceiptState) {
 			defer wg.Done()
 			id := "test-persist-other-" + string(st)
-			expectedIDs[id] = true
 			r := Receipt{ID: id, State: st}
 			got, err := Persist(r)
 			if err != nil {

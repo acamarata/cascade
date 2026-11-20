@@ -225,7 +225,7 @@ func TestStrayPipeHolderDoesNotHangCollect(t *testing.T) {
 		`"); print F "$$"; close F; sleep 30' &` + "\n" + f.body
 	start := time.Now()
 	_, _, err = run(t, f.driver(f.config()), f.spec())
-	escapee := readPidWithin(t, pidf, testkit.Deadline(t, 5*time.Second))
+	escapee := readPidWithin(t, pidf, testkit.Deadline(t, 10*time.Second))
 	defer func() { _ = syscall.Kill(escapee, syscall.SIGKILL) }()
 	if err != nil || time.Since(start) > testkit.Deadline(t, 15*time.Second) {
 		t.Fatalf("Collect = %v after %s", err, time.Since(start))

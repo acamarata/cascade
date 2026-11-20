@@ -3,6 +3,7 @@ package limiter
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 )
@@ -15,11 +16,16 @@ func (f *fakeTimer) C() <-chan time.Time { return f.ch }
 func (f *fakeTimer) Stop() bool          { return true }
 
 type fakeClock struct {
+	mu    sync.Mutex
 	now   time.Time
 	timer *fakeTimer
 }
 
-func (f *fakeClock) Now() time.Time { return f.now }
+func (f *fakeClock) Now() time.Time {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.now
+}
 func (f *fakeClock) NewTimer(d time.Duration) Timer {
 	return f.timer
 }
@@ -61,8 +67,10 @@ func TestSharedBucketAcrossRetries(t *testing.T) {
 			t.Fatalf("Wait 1: %v", err)
 		}
 		go func() {
+			fc.mu.Lock()
 			fc.now = fc.now.Add(60 * time.Second)
-			ch <- fc.now
+			fc.mu.Unlock()
+			ch <- fc.Now()
 		}()
 		if err := l.Wait(ctx); err != nil {
 			t.Fatalf("Wait 2: %v", err)

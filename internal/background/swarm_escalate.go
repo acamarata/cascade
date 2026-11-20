@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 )
 
 // ErrInvalidEscalation is returned when the escalation input is invalid.
@@ -46,7 +47,8 @@ func WriteEscalate(path string, o Outcome) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrEscalationWrite, err)
 	}
-	if info.Mode().Perm()&0077 != 0 {
+	// Windows has no POSIX mode bits, so skip the group/other permission check there.
+	if runtime.GOOS != "windows" && info.Mode().Perm()&0077 != 0 {
 		return fmt.Errorf("%w: existing file has group/other permissions", ErrEscalationWrite)
 	}
 
