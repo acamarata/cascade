@@ -118,7 +118,7 @@ func TestPrePushHookRealGit(t *testing.T) {
 	if ok {
 		t.Fatalf("expected the pre-push hook to reject the seeded bad commit, but push succeeded:\n%s", out)
 	}
-	t.Logf("pre-push hook correctly rejected the seeded violation:\n%s", out)
+	t.Logf("pre-push hook correctly rejected the seeded violation (%d bytes of hook output not echoed: its FAIL lines would read as real test failures in test2json)", len(out))
 
 	// Fix: amend the bad commit to a clean, conventional message and drop
 	// the identifier-tripping content, then push again and expect success.
@@ -130,5 +130,5 @@ func TestPrePushHookRealGit(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected the pre-push hook to pass a clean range, but push failed:\n%s", out)
 	}
-	t.Logf("pre-push hook correctly accepted the clean range:\n%s", out)
+	t.Logf("pre-push hook correctly accepted the clean range (%d bytes of hook output)", len(out))
 }
