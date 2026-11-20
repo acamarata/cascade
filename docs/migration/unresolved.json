@@ -1,5 +1,23 @@
 [
   {
+    "pointer": "ceo",
+    "class": "command",
+    "path": "internal/consult/ladder.go",
+    "reason": "no declared v2 replacement"
+  },
+  {
+    "pointer": "ceo",
+    "class": "command",
+    "path": "internal/consult/ladder_g1862_test.go",
+    "reason": "no declared v2 replacement"
+  },
+  {
+    "pointer": "ceo",
+    "class": "command",
+    "path": "internal/consult/ladder_test.go",
+    "reason": "no declared v2 replacement"
+  },
+  {
     "pointer": "cascade hook",
     "class": "command",
     "path": "cmd/cascade/hooks_runners.go",
