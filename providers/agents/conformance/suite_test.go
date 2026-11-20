@@ -22,6 +22,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -198,7 +199,10 @@ func TestSuiteFailsAgainstEmptyImplementation(t *testing.T) {
 	if err == nil {
 		t.Fatalf("empty implementation PASSED the suite (child exit 0): the suite is vacuous\n%s", out)
 	}
-	t.Logf("empty implementation correctly FAILED the suite (child exit %v), proving non-vacuity:\n%s", err, out)
+	// Do not echo the child output here: its "--- FAIL:" lines inside this
+	// (passing) test confuse test2json and gotestsum in CI, which then report
+	// this test as failed. A count is enough evidence for the log.
+	t.Logf("empty implementation correctly FAILED the suite (child exit %v, %d failing check lines), proving non-vacuity", err, strings.Count(string(out), "--- FAIL:"))
 }
 
 // AD/S-61.T2's factory entry (append-only), then the R-14.322 proofs.
