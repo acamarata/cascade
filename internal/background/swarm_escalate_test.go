@@ -21,7 +21,8 @@ func TestEmitEscalateEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat: %v", err)
 	}
-	if info.Mode().Perm() != 0600 {
+	// Windows has no POSIX mode bits, so the 0600 check is unix-only.
+	if filepath.Separator != '\\' && info.Mode().Perm() != 0600 {
 		t.Fatalf("expected mode 0600, got %v", info.Mode().Perm())
 	}
 

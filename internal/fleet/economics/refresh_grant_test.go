@@ -1,7 +1,6 @@
 package economics
 
-// Purpose: RefreshGrantOnce against injected fake copies, token exchange,
-// census and lane writer (every failure is injected here, in the test).
+// Purpose: RefreshGrantOnce against injected fake copies, token exchange, census and lane writer (all failures injected here).
 
 import (
 	"bytes"
@@ -21,11 +20,7 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-var (
-	primaryDir = filepath.Join(os.TempDir(), "home", "op", ".harness")
-	fleetDir   = filepath.Join(os.TempDir(), "fleet", "acct-2")
-	poll5      = 5 * time.Minute
-)
+var primaryDir, fleetDir, poll5 = filepath.Join(os.TempDir(), "home", "op", ".harness"), filepath.Join(os.TempDir(), "fleet", "acct-2"), 5 * time.Minute
 
 var (
 	grantT0     = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
@@ -250,6 +245,9 @@ func TestAuthRequiredOnlyOnProviderEvidence(t *testing.T) {
 }
 
 func TestRefresherResolvedFromCandidates(t *testing.T) {
+	if filepath.Separator == '\\' { // refresher() needs an exec bit, which windows lacks: harness-CLI refresh is unix-only (windows gap filed)
+		t.Skip("harness-CLI refresh needs an exec bit; unix-only")
+	}
 	bin := refresherBinary(t)
 	r := newRig(poll5, nil, oneCopy(30*time.Minute))
 	r.refreshers = []string{"harness", filepath.Join(t.TempDir(), "absent"), filepath.Dir(bin), bin}
