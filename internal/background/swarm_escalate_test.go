@@ -86,7 +86,8 @@ func TestEmitEscalateEvent(t *testing.T) {
 	broadPath := filepath.Join(dir, "broad.jsonl")
 	os.WriteFile(broadPath, []byte(""), 0644)
 	err = WriteEscalate(broadPath, Outcome{Status: "done"})
-	if !errors.Is(err, ErrEscalationWrite) {
+	// Windows has no POSIX mode bits, so the writer cannot reject broad permissions there.
+	if filepath.Separator != '\\' && !errors.Is(err, ErrEscalationWrite) {
 		t.Fatalf("expected ErrEscalationWrite for broad permissions, got %v", err)
 	}
 
