@@ -21,7 +21,11 @@ import (
 	"github.com/acamarata/cascade/pkg/cascade"
 )
 
-const primaryDir, fleetDir, poll5 = "/home/op/.harness", "/fleet/acct-2", 5 * time.Minute
+var (
+	primaryDir = filepath.Join(os.TempDir(), "home", "op", ".harness")
+	fleetDir   = filepath.Join(os.TempDir(), "fleet", "acct-2")
+	poll5      = 5 * time.Minute
+)
 
 var (
 	grantT0     = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
