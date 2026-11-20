@@ -144,7 +144,7 @@ func TestRewriteSummaryRewriterReturnsError(t *testing.T) {
 
 func TestRewriteSummaryEmptyRewrittenText(t *testing.T) {
 	tests := []struct {
-		name     string
+		name      string
 		rewritten string
 	}{
 		{name: "empty string", rewritten: ""},
