@@ -44,11 +44,46 @@ func requireIsolatedHome(t *testing.T, dir string) {
 	t.Helper()
 	for _, k := range homeVars {
 		v := os.Getenv(k)
-		rel, err := filepath.Rel(os.TempDir(), v)
-		if v != dir || err != nil || strings.HasPrefix(rel, "..") || (operatorHome != "" && v == operatorHome) {
+		if !isAllowedTempHome(v, dir) {
 			t.Fatalf("home guard: %s is not an isolated temp dir", k)
 		}
 	}
+}
+
+// isAllowedTempHome reports whether v is exactly dir and dir falls under
+// os.TempDir() or $GOTMPDIR (both symlink-resolved), while refusing the
+// operator's real HOME.
+func isAllowedTempHome(v, dir string) bool {
+	if v != dir {
+		return false
+	}
+	if operatorHome != "" && v == operatorHome {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	if underRoot(resolved, os.TempDir()) {
+		return true
+	}
+	if gt := os.Getenv("GOTMPDIR"); gt != "" {
+		if underRoot(resolved, gt) {
+			return true
+		}
+	}
+	return false
+}
+
+// underRoot reports whether resolved is inside root after both are
+// symlink-resolved.
+func underRoot(resolved, root string) bool {
+	rr, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		rr = root
+	}
+	rel, err := filepath.Rel(rr, resolved)
+	return err == nil && !strings.HasPrefix(rel, "..")
 }
 
 // wantErr asserts err is a cascade *Error of kind whose message is exactly
