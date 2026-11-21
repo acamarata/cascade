@@ -17,3 +17,20 @@ func ShouldUnload(lastUse, now time.Time, policy KeepWarm) bool {
 	idleDuration := time.Duration(policy.IdleMinutes) * time.Minute
 	return now.Sub(lastUse) > idleDuration
 }
+
+// Task represents a request or operation to be routed.
+type Task struct {
+	// IsDecision indicates the task is a decision model call (short classifier).
+	IsDecision bool
+	// IsPrivateChat indicates the task is a privacy-bound chat session.
+	IsPrivateChat bool
+	// IsOffline indicates the task is running in an offline environment.
+	IsOffline bool
+}
+
+// WantsLocal reports whether a task should be executed locally rather than
+// being routed to a gateway or hosted model. It returns true for decision
+// model calls, privacy-bound chats, and offline runs.
+func WantsLocal(task Task) bool {
+	return task.IsDecision || task.IsPrivateChat || task.IsOffline
+}

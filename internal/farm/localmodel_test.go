@@ -66,3 +66,45 @@ func TestKeepWarmDefaultTenMinutes(t *testing.T) {
 		t.Fatal("expected unload after 10 minutes")
 	}
 }
+
+// TestLocalModelOnlyWhenNeeded verifies that WantsLocal returns true only for
+// decision model calls, privacy-bound chats, and offline runs.
+func TestLocalModelOnlyWhenNeeded(t *testing.T) {
+	cases := []struct {
+		name string
+		task Task
+		want bool
+	}{
+		{"decision model", Task{IsDecision: true}, true},
+		{"private chat", Task{IsPrivateChat: true}, true},
+		{"offline run", Task{IsOffline: true}, true},
+		{"decision and offline", Task{IsDecision: true, IsOffline: true}, true},
+		{"hosted task", Task{}, false},
+		{"gateway task", Task{IsDecision: false, IsPrivateChat: false, IsOffline: false}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := WantsLocal(tc.task); got != tc.want {
+				t.Errorf("WantsLocal(%+v) = %v, want %v", tc.task, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDefaultIsHostedOrGateway verifies that a task with no special flags
+// is routed to hosted or gateway (WantsLocal returns false).
+func TestDefaultIsHostedOrGateway(t *testing.T) {
+	task := Task{}
+	if WantsLocal(task) {
+		t.Fatal("expected WantsLocal to return false for default task (hosted/gateway)")
+	}
+}
+
+// TestPrivateChatStaysLocal verifies that a privacy-bound chat session
+// always executes locally.
+func TestPrivateChatStaysLocal(t *testing.T) {
+	task := Task{IsPrivateChat: true}
+	if !WantsLocal(task) {
+		t.Fatal("expected WantsLocal to return true for private chat")
+	}
+}
