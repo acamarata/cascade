@@ -120,6 +120,16 @@ func deadPid(t *testing.T) int {
 
 func intToBytes(n int) string { return strconv.Itoa(n) }
 
+// placeholderBindRoot is the directory the short bind root is made under:
+// $GOTMPDIR when set (t.TempDir lives there, so the rename stays on one
+// device), else os.TempDir.
+func placeholderBindRoot() string {
+	if d := os.Getenv("GOTMPDIR"); d != "" {
+		return d
+	}
+	return os.TempDir()
+}
+
 // writeSocketPlaceholder leaves a real socket file at path that nobody
 // listens on and nobody holds the lock for: the inode a crashed daemon
 // leaves behind. Scan judges the path under the socket lock and refuses
@@ -130,7 +140,7 @@ func intToBytes(n int) string { return strconv.Itoa(n) }
 // no listen, so a real connect to it is refused.
 func writeSocketPlaceholder(t *testing.T, path string) {
 	t.Helper()
-	short, err := os.MkdirTemp("", "rsp")
+	short, err := os.MkdirTemp(placeholderBindRoot(), "rsp")
 	if err != nil {
 		t.Fatalf("seed socket placeholder: %v", err)
 	}
