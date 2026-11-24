@@ -27,6 +27,7 @@ fixture does not, mirroring `internal/rpc/handler_unix_integration_test.go`'s
 established real-socket pattern.
 
 - Tool: `go test` (`TestSupervisorRPCFixture`, `internal/rpc/supervisor_test.go`).
+- Recapture: run that test with `CASCADE_UPDATE_FIXTURES=1`.
 - Repo commit at capture time: `d041554` (branch `p1-integration`).
 - Go toolchain: `go1.26.6 darwin/arm64`.
 - Date: 2026-09-13.
@@ -63,6 +64,7 @@ real bus, synthetic `Emit*`/`Publish` calls standing in for a live
 daemon's own event producers.
 
 - Tool: `go test` (`TestSupervisorSSEFixtureCapture`, `internal/rpc/supervisor_sse_test.go`).
+- Recapture: run that test with `CASCADE_UPDATE_FIXTURES=1`.
 - Repo commit at capture time: `d041554` (branch `p1-integration`).
 - Go toolchain: `go1.26.6 darwin/arm64`.
 - Date: 2026-09-13.

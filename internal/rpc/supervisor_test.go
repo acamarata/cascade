@@ -222,7 +222,11 @@ func TestSupervisorRPCFixture(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal fixture: %v", err)
 	}
-	writeSupervisorFixture(t, "supervisor-rpc-fixture.json", respBytes)
+	dir := t.TempDir()
+	if os.Getenv("CASCADE_UPDATE_FIXTURES") == "1" {
+		dir = "testdata"
+	}
+	writeSupervisorFixture(t, dir, "supervisor-rpc-fixture.json", respBytes)
 }
 
 func mustMarshalSupervisor(t *testing.T, v any) json.RawMessage {
@@ -234,11 +238,12 @@ func mustMarshalSupervisor(t *testing.T, v any) json.RawMessage {
 	return b
 }
 
-// writeSupervisorFixture writes b to testdata/name, pretty-printed. See
-// testdata/README.md for provenance.
-func writeSupervisorFixture(t *testing.T, name string, b []byte) {
+// writeSupervisorFixture writes b to dir/name, pretty-printed. See
+// testdata/README.md for provenance. Callers pass t.TempDir() by default;
+// pass "testdata" only when CASCADE_UPDATE_FIXTURES=1.
+func writeSupervisorFixture(t *testing.T, dir, name string, b []byte) {
 	t.Helper()
-	path := filepath.Join("testdata", name)
+	path := filepath.Join(dir, name)
 	var pretty map[string]any
 	if err := json.Unmarshal(b, &pretty); err != nil {
 		t.Fatalf("unmarshal for pretty-print: %v", err)

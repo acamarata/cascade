@@ -126,7 +126,11 @@ func TestSupervisorSSEFixtureCapture(t *testing.T) {
 	<-done
 
 	_, body, _ := w.snapshot()
-	if err := os.WriteFile(filepath.Join("testdata", "supervisor-sse-fixture.ndjson"), []byte(body), 0o644); err != nil {
+	dir := t.TempDir()
+	if os.Getenv("CASCADE_UPDATE_FIXTURES") == "1" {
+		dir = "testdata"
+	}
+	if err := os.WriteFile(filepath.Join(dir, "supervisor-sse-fixture.ndjson"), []byte(body), 0o644); err != nil {
 		t.Fatalf("write fixture: %v", err)
 	}
 }
