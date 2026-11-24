@@ -33,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/acamarata/cascade/internal/client"
 	"github.com/acamarata/cascade/internal/hooks/egress"
 	"github.com/acamarata/cascade/pkg/cascade"
 )
@@ -63,14 +64,7 @@ var pinnedHosts = map[string]bool{
 }
 
 // releaseTransport is shared so connections are reused across one update.
-var releaseTransport = &http.Transport{
-	Proxy:                 nil,
-	ForceAttemptHTTP2:     true,
-	TLSHandshakeTimeout:   15 * time.Second,
-	ResponseHeaderTimeout: 60 * time.Second,
-	IdleConnTimeout:       30 * time.Second,
-	MaxIdleConns:          4,
-}
+var releaseTransport = client.NewReleaseTransport()
 
 // Interceptor is the egress transit seam; the CLI passes ProcessInterceptor.
 type Interceptor interface {
