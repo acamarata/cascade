@@ -62,7 +62,8 @@ func evidenceDaemonFixture(t *testing.T) evidenceDaemon {
 	}
 	transport := &http.Transport{DialContext: dial}
 	t.Cleanup(transport.CloseIdleConnections)
-	db, err := sql.Open("sqlite", filepath.Join(home, "data", "cascade.db"))
+	dbPath := filepath.Join(home, "data", "cascade.db")
+	db, err := sql.Open("sqlite", dbPath+"?_busy_timeout=5000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,12 +101,17 @@ func (d evidenceDaemon) append(t *testing.T, ticket, key string, class provider.
 	}
 }
 
+// evidenceGet sends a local-socket-shaped GET to the events endpoint.
+// It sets r.Host to "unix" so guardLocalRequest's browserShaped check
+// admits the request (a real first-party client never sends Host
+// "localhost" or an Origin header).
 func (d evidenceDaemon) get(t *testing.T, query, marker string) *http.Response {
 	t.Helper()
-	r, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost/events?topic=jobs.evidence"+query, nil)
+	r, err := http.NewRequestWithContext(context.Background(), "GET", "http://unix/events?topic=jobs.evidence"+query, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r.Host = "unix"
 	if marker != "" {
 		r.Header.Set(principal.HeaderOwnerCLI, marker)
 	}
@@ -158,7 +164,7 @@ func TestJobsEvidenceAccessOwnerOnly(t *testing.T) {
 		t.Fatalf("anonymous status %d", res.StatusCode)
 	}
 	res = d.get(t, "&ticket=A", "wrong")
-	if res.StatusCode != 403 {
+	if res.StatusCode != 400 {
 		t.Fatalf("invalid marker status %d", res.StatusCode)
 	}
 	testEvidencePrincipalRefusal(t, d)
@@ -171,10 +177,12 @@ func testEvidencePrincipalRefusal(t *testing.T, d evidenceDaemon) {
 	})
 	for _, method := range []string{"jobs.evidence.list", "plugin.pbd.evidence"} {
 		body := `{"jsonrpc":"2.0","id":1,"method":"` + method + `","params":{"ticket":"A"}}`
-		r, err := http.NewRequestWithContext(context.Background(), "POST", "http://localhost/rpc", strings.NewReader(body))
+		r, err := http.NewRequestWithContext(context.Background(), "POST", "http://unix/rpc", strings.NewReader(body))
 		if err != nil {
 			t.Fatal(err)
 		}
+		r.Host = "unix"
+		r.Header.Set("Content-Type", "application/json")
 		r.Header.Set(principal.HeaderToken, "test-session-token")
 		res, err := d.http.Do(r)
 		if err != nil {
@@ -186,10 +194,11 @@ func testEvidencePrincipalRefusal(t *testing.T, d evidenceDaemon) {
 			t.Fatalf("principal response: %s, %v", raw, err)
 		}
 	}
-	r, err := http.NewRequestWithContext(context.Background(), "GET", "http://localhost/events?topic=jobs.evidence&ticket=A", nil)
+	r, err := http.NewRequestWithContext(context.Background(), "GET", "http://unix/events?topic=jobs.evidence&ticket=A", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	r.Host = "unix"
 	r.Header.Set(principal.HeaderToken, "test-session-token")
 	res, err := d.http.Do(r)
 	if err != nil {
